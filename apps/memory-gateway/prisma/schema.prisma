@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Document {
+  id          String    @id
+  path        String    @unique
+  title       String
+  kind        String
+  namespace   String
+  sensitivity String
+  status      String
+  confidence  String?
+  checksum    String
+  frontmatter Json      @default("{}")
+  bodyText    String    @map("body_text")
+  createdAt   DateTime  @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @map("updated_at") @db.Timestamptz()
+  indexedAt   DateTime? @map("indexed_at") @db.Timestamptz()
+  chunks      Chunk[]
+
+  @@index([namespace])
+  @@index([sensitivity])
+  @@map("documents")
+}
+
+model Chunk {
+  id          String                   @id
+  documentId  String                   @map("document_id")
+  chunkIndex  Int                      @map("chunk_index")
+  headingPath String?                  @map("heading_path")
+  content     String
+  tokenCount  Int?                     @map("token_count")
+  tsv         Unsupported("tsvector")?
+  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz()
+  document    Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("chunks")
+}
+
+model AuditLog {
+  id                   String   @id
+  actor                String
+  client               String
+  action               String
+  namespace            String
+  sensitivityRequested String?  @map("sensitivity_requested")
+  inputsHash           String?  @map("inputs_hash")
+  returnedDocumentIds  String[] @default([]) @map("returned_document_ids")
+  approved             Boolean?
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("audit_log")
+}
+
+model RetrievalTrace {
+  id                  String   @id
+  actor               String
+  query               String
+  namespaceFilter     String[] @default([]) @map("namespace_filter")
+  selectedChunkIds    String[] @default([]) @map("selected_chunk_ids")
+  selectedDocumentIds String[] @default([]) @map("selected_document_ids")
+  rankingDebug        Json     @default("{}") @map("ranking_debug")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("retrieval_traces")
+}
