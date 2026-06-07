@@ -25,7 +25,13 @@ function splitBySize(text: string, max: number): string[] {
     const candidate = current ? `${current}\n\n${p}` : p;
     if (candidate.length > max && current) {
       pieces.push(current);
-      current = p;
+      // p itself may exceed max — hard-split it rather than carry it into current
+      if (p.length > max) {
+        for (let i = 0; i < p.length; i += max) pieces.push(p.slice(i, i + max));
+        current = "";
+      } else {
+        current = p;
+      }
     } else if (candidate.length > max && !current) {
       // single oversized paragraph: hard-split on length
       for (let i = 0; i < p.length; i += max) pieces.push(p.slice(i, i + max));
