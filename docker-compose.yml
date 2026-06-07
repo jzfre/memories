@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: memories-db
+    environment:
+      POSTGRES_USER: memories
+      POSTGRES_PASSWORD: memories
+      POSTGRES_DB: memories
+    ports:
+      - "5432:5432"
+    volumes:
+      - memories_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memories -d memories"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  memories_pgdata:
