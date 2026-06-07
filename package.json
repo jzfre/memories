@@ -1,0 +1,21 @@
+{
+  "name": "memories",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "generate": "pnpm --filter @memories/memory-gateway db:generate",
+    "migrate": "pnpm --filter @memories/memory-gateway db:migrate",
+    "scan": "pnpm --filter @memories/memory-gateway scan",
+    "api": "pnpm --filter @memories/memory-gateway api",
+    "mcp": "pnpm --filter @memories/memory-gateway mcp",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
