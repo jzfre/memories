@@ -1,0 +1,10 @@
+vault:
+  root: /Users/jzfre/Documents/Obsidian Vault
+
+policy:
+  default_namespace: personal
+  default_sensitivity: private
+  allowed_namespaces: [personal, career, brain-gym, home, public-research]
+  allowed_sensitivity: [public, internal, private]
+
+actor: jr

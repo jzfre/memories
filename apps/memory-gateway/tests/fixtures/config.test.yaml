@@ -1,0 +1,10 @@
+vault:
+  root: /tmp/overridden-by-VAULT_ROOT
+
+policy:
+  default_namespace: personal
+  default_sensitivity: private
+  allowed_namespaces: [personal, work/client-a]
+  allowed_sensitivity: [public, internal, private, client-confidential]
+
+actor: test
