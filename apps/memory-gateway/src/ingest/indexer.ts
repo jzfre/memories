@@ -30,8 +30,11 @@ export async function scanVault(opts: { dryRun?: boolean; client?: string } = {}
     seenIds.add(id);
     if (warnings.length) report.warnings.push({ path: f.relPath, messages: warnings });
 
-    const existing = await prisma.document.findUnique({ where: { id }, select: { checksum: true } });
-    if (existing && existing.checksum === sum) {
+    const existing = await prisma.document.findUnique({
+      where: { id },
+      select: { checksum: true, status: true },
+    });
+    if (existing && existing.checksum === sum && existing.status !== "archived") {
       report.skipped++;
       continue;
     }
