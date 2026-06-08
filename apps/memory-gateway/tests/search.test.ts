@@ -56,3 +56,25 @@ describe("search", () => {
     expect(approved?.action).toBe("memory.search");
   });
 });
+
+describe("search quality (title/heading indexing + OR fallback)", () => {
+  beforeEach(resetDb);
+
+  it("finds a document by words in its TITLE that are absent from the body", async () => {
+    // The fixture decision note's body has no 'obsidian'/'canonical' — those words
+    // live only in its H1 title "Use Obsidian as canonical store". This is the exact
+    // class of query that returned nothing in LM Studio.
+    const search = await seedAndImport();
+    const res = await search({ query: "obsidian canonical decision" }, { client: "rest" });
+    const ids = res.results.map((r) => r.document_id);
+    expect(ids.some((id) => id.includes("decision-canonical"))).toBe(true);
+  });
+
+  it("falls back to OR semantics when not every term matches (recall)", async () => {
+    // 'pgvector' is in the bodies; 'zqxbogusterm' is nowhere. Strict AND would return
+    // zero; OR-fallback must still surface the pgvector documents.
+    const search = await seedAndImport();
+    const res = await search({ query: "pgvector zqxbogusterm" }, { client: "rest" });
+    expect(res.results.length).toBeGreaterThan(0);
+  });
+});

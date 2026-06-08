@@ -87,6 +87,7 @@ export async function scanVault(opts: { dryRun?: boolean; client?: string } = {}
             documentId: id,
             chunkIndex: c.chunkIndex,
             headingPath: c.headingPath,
+            title,
             content: c.content,
             tokenCount: c.tokenCount,
           })),
