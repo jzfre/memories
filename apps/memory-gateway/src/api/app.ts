@@ -4,11 +4,30 @@ import { search } from "../retrieval/search";
 import { fetchDocument } from "../retrieval/fetch";
 import { healthStatus } from "../health/index";
 import { scanVault } from "../ingest/indexer";
+import { computeIndexStatus } from "../status/index";
+import { writeAudit } from "../audit/index";
+import { loadConfig } from "../config/index";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => healthStatus({ client: "rest" }));
+
+  app.get("/status", async () => {
+    const status = await computeIndexStatus();
+    const { actor } = loadConfig();
+    await writeAudit({
+      actor,
+      client: "rest",
+      action: "index.status",
+      namespace: "n/a",
+      sensitivityRequested: null,
+      inputs: {},
+      returnedDocumentIds: [],
+      approved: true,
+    });
+    return status;
+  });
 
   app.post("/ingest/scan", async (req) => {
     const body = (req.body ?? {}) as { dry_run?: boolean };

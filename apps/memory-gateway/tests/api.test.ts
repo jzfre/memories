@@ -64,4 +64,17 @@ describe("REST API", () => {
     expect(audited).not.toBeNull();
     await app.close();
   });
+
+  it("GET /status returns the index breakdown and audits the call", async () => {
+    const app = await buildAndSeed();
+    const res = await app.inject({ method: "GET", url: "/status" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.totals.documents).toBeGreaterThan(0);
+    expect(body.validation).toHaveProperty("valid");
+    expect(Array.isArray(body.issues)).toBe(true);
+    const audited = await prisma.auditLog.findFirst({ where: { action: "index.status", client: "rest" } });
+    expect(audited).not.toBeNull();
+    await app.close();
+  });
 });
