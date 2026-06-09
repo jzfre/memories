@@ -15,4 +15,16 @@ describe("cli runScan", () => {
     const report = await runScan({ dryRun: false });
     expect(report.added).toBeGreaterThan(0);
   });
+
+  it("runStatus returns the index breakdown", async () => {
+    process.env.VAULT_ROOT = VAULT;
+    const { __resetConfigCache } = await import("../src/config/index");
+    __resetConfigCache();
+    const { runScan } = await import("../src/cli/index");
+    await runScan({ dryRun: false });
+    const { runStatus } = await import("../src/cli/index");
+    const s = await runStatus();
+    expect(s.totals.documents).toBeGreaterThan(0);
+    expect(s.validation).toHaveProperty("valid");
+  });
 });
