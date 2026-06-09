@@ -106,6 +106,9 @@ export async function scanVault(
           parseStatus: validation.parseStatus,
           validationStatus: validation.validationStatus,
           validationIssues: validation.issues as unknown as Prisma.InputJsonValue,
+          embeddingStatus: canEmbed ? "pending" : "disabled",
+          embeddedAt: null,
+          lastError: null,
           bodyText: body,
           createdAt: now,
           updatedAt: now,
@@ -124,6 +127,9 @@ export async function scanVault(
           parseStatus: validation.parseStatus,
           validationStatus: validation.validationStatus,
           validationIssues: validation.issues as unknown as Prisma.InputJsonValue,
+          embeddingStatus: canEmbed ? "pending" : "disabled",
+          embeddedAt: null,
+          lastError: null,
           bodyText: body,
           updatedAt: now,
           indexedAt: now,
@@ -157,10 +163,18 @@ export async function scanVault(
             prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector WHERE id = ${chunkId(id, c.chunkIndex)}`,
           ),
         );
+        await prisma.document.update({ where: { id }, data: { embeddingStatus: "current", embeddedAt: now } });
         report.embedded += chunks.length;
-      } catch {
+      } catch (e) {
+        await prisma.document.update({
+          where: { id },
+          data: { embeddingStatus: "error", lastError: (e as Error).message },
+        });
         report.embedErrors += 1;
       }
+    } else if (canEmbed && chunks.length === 0) {
+      // Empty note: nothing to embed, but it is not "pending".
+      await prisma.document.update({ where: { id }, data: { embeddingStatus: "current", embeddedAt: now } });
     }
     existing ? report.updated++ : report.added++;
     if (validation.validationStatus === "incomplete") report.incomplete++;
@@ -221,5 +235,10 @@ export async function embedPending(deps: IngestDeps = {}, batchSize = 32): Promi
     );
     embedded += rows.length;
   }
+  await prisma.$executeRawUnsafe(
+    `UPDATE documents d SET embedding_status='current', embedded_at=now()
+     WHERE d.embedding_status IN ('pending','error','disabled')
+       AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.document_id=d.id AND c.embedding IS NULL)`,
+  );
   return { embedded };
 }
