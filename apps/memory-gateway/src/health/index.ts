@@ -1,6 +1,7 @@
 import { prisma } from "../db/client";
 import { loadConfig } from "../config/index";
 import { writeAudit } from "../audit/index";
+import { computeIndexStatus } from "../status/index";
 
 export interface HealthStatus {
   status: "ok" | "degraded";
@@ -8,6 +9,7 @@ export interface HealthStatus {
   documents: number;
   chunks: number;
   last_indexed_at: Date | null;
+  index: { validation: Record<string, number>; embedding: Record<string, number> };
 }
 
 export async function healthStatus(ctx: { client?: string } = {}): Promise<HealthStatus> {
@@ -20,6 +22,12 @@ export async function healthStatus(ctx: { client?: string } = {}): Promise<Healt
   const documents = db === "ok" ? await prisma.document.count() : 0;
   const chunks = db === "ok" ? await prisma.chunk.count() : 0;
   const agg = db === "ok" ? await prisma.document.aggregate({ _max: { indexedAt: true } }) : null;
+
+  let index = { validation: {}, embedding: {} } as HealthStatus["index"];
+  if (db === "ok") {
+    const s = await computeIndexStatus();
+    index = { validation: s.validation, embedding: s.embedding };
+  }
 
   // Audit lightly; never let an audit failure (e.g. db down) break the health check.
   try {
@@ -44,5 +52,6 @@ export async function healthStatus(ctx: { client?: string } = {}): Promise<Healt
     documents,
     chunks,
     last_indexed_at: agg?._max.indexedAt ?? null,
+    index,
   };
 }

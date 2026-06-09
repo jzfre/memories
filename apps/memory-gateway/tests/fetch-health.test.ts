@@ -52,4 +52,11 @@ describe("fetch + health", () => {
     const audited = await prisma.auditLog.findFirst({ where: { action: "health.status" } });
     expect(audited).not.toBeNull();
   });
+
+  it("health includes index validation+embedding counts", async () => {
+    const { healthStatus } = await seedAndImport();
+    const h = await healthStatus({ client: "rest" });
+    expect(h.index.validation.valid).toBeGreaterThanOrEqual(0);
+    expect(h.index.embedding).toHaveProperty("current");
+  });
 });
