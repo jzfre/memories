@@ -25,7 +25,7 @@ describe("SearchResult.freshness", () => {
       source: { path: "p", kind: "note", confidence: null, status: "active", review_state: null },
       freshness: { validation: "incomplete", embedding: "current" },
     });
-    expect(r.freshness.validation).toBe("incomplete");
-    expect(r.freshness.embedding).toBe("current");
+    expect(r.freshness?.validation).toBe("incomplete");
+    expect(r.freshness?.embedding).toBe("current");
   });
 });
