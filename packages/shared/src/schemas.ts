@@ -28,6 +28,12 @@ export const SearchResultSource = z.object({
   review_state: z.string().nullable(),
 });
 
+export const Freshness = z.object({
+  validation: z.enum(["valid", "incomplete", "invalid"]),
+  embedding: z.enum(["disabled", "pending", "current", "stale", "error"]),
+});
+export type Freshness = z.infer<typeof Freshness>;
+
 export const SearchResult = z.object({
   document_id: z.string(),
   chunk_id: z.string(),
@@ -35,6 +41,7 @@ export const SearchResult = z.object({
   snippet: z.string(),
   score: z.number(),
   source: SearchResultSource,
+  freshness: Freshness,
 });
 export type SearchResult = z.infer<typeof SearchResult>;
 
