@@ -211,6 +211,21 @@ export async function scanVault(
 }
 
 /**
+ * Drop all derived rows and rebuild them from the vault. Destructive to the INDEX only
+ * (cascades chunks); the Obsidian vault is the source of truth. Re-scans, then backfills
+ * any embeddings that weren't computed inline.
+ */
+export async function rebuildIndex(
+  opts: { client?: string } = {},
+  deps: IngestDeps = {},
+): Promise<ScanReport> {
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "chunks","documents" RESTART IDENTITY CASCADE');
+  const report = await scanVault({ client: opts.client ?? "cli" }, deps);
+  await embedPending(deps);
+  return report;
+}
+
+/**
  * Backfill embeddings for chunks that don't have one yet (e.g. after enabling
  * embeddings, or after the pgvector migration). Best-effort and resumable: it loops
  * until no null-embedding chunks remain. Returns the number embedded.
