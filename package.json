@@ -10,6 +10,7 @@
     "generate": "pnpm --filter @memories/memory-gateway db:generate",
     "migrate": "pnpm --filter @memories/memory-gateway db:migrate",
     "scan": "pnpm --filter @memories/memory-gateway scan",
+    "reembed": "pnpm --filter @memories/memory-gateway reembed",
     "api": "pnpm --filter @memories/memory-gateway api",
     "mcp": "pnpm --filter @memories/memory-gateway mcp",
     "test": "pnpm -r test",

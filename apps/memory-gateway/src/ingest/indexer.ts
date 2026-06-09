@@ -3,6 +3,7 @@ import { checksum, chunkId, chunkMarkdown, documentIdFromPath, parseNote } from 
 import { loadConfig } from "../config/index";
 import { prisma } from "../db/client";
 import { writeAudit } from "../audit/index";
+import { getDefaultEmbedder, toVectorLiteral, type Embedder } from "../embed/index";
 import { scanVaultFiles } from "./scanner";
 
 export interface ScanReport {
@@ -10,18 +11,36 @@ export interface ScanReport {
   updated: number;
   skipped: number;
   archived: number;
+  embedded: number;
+  embedErrors: number;
   warnings: { path: string; messages: string[] }[];
 }
 
-export async function scanVault(opts: { dryRun?: boolean; client?: string } = {}): Promise<ScanReport> {
+export interface IngestDeps {
+  embedder?: Embedder;
+}
+
+/** Text fed to the embedder for a chunk: title + heading give it document context. */
+function chunkEmbedText(title: string, headingPath: string | null, content: string): string {
+  return [title, headingPath ?? "", content].filter(Boolean).join("\n");
+}
+
+export async function scanVault(
+  opts: { dryRun?: boolean; client?: string } = {},
+  deps: IngestDeps = {},
+): Promise<ScanReport> {
   const config = loadConfig();
   const defaults = {
     namespace: config.policy.default_namespace,
     sensitivity: config.policy.default_sensitivity,
   };
   const files = scanVaultFiles(config.vault.root);
-  const report: ScanReport = { added: 0, updated: 0, skipped: 0, archived: 0, warnings: [] };
+  const report: ScanReport = { added: 0, updated: 0, skipped: 0, archived: 0, embedded: 0, embedErrors: 0, warnings: [] };
   const seenIds = new Set<string>();
+
+  // Embeddings are best-effort: probe once, and skip silently if unavailable.
+  const embedder = deps.embedder ?? getDefaultEmbedder();
+  const canEmbed = !opts.dryRun && embedder.dim > 0 && (await embedder.available());
 
   for (const f of files) {
     const sum = checksum(f.content);
@@ -95,6 +114,23 @@ export async function scanVault(opts: { dryRun?: boolean; client?: string } = {}
         });
       }
     });
+
+    // Compute embeddings for this document's chunks (best-effort, outside the txn).
+    if (canEmbed && chunks.length) {
+      try {
+        const vectors = await embedder.embedDocuments(
+          chunks.map((c) => chunkEmbedText(title, c.headingPath, c.content)),
+        );
+        await Promise.all(
+          chunks.map((c, i) =>
+            prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector WHERE id = ${chunkId(id, c.chunkIndex)}`,
+          ),
+        );
+        report.embedded += chunks.length;
+      } catch {
+        report.embedErrors += 1;
+      }
+    }
     existing ? report.updated++ : report.added++;
   }
 
@@ -125,4 +161,32 @@ export async function scanVault(opts: { dryRun?: boolean; client?: string } = {}
   });
 
   return report;
+}
+
+/**
+ * Backfill embeddings for chunks that don't have one yet (e.g. after enabling
+ * embeddings, or after the pgvector migration). Best-effort and resumable: it loops
+ * until no null-embedding chunks remain. Returns the number embedded.
+ */
+export async function embedPending(deps: IngestDeps = {}, batchSize = 32): Promise<{ embedded: number }> {
+  const embedder = deps.embedder ?? getDefaultEmbedder();
+  if (!(embedder.dim > 0 && (await embedder.available()))) return { embedded: 0 };
+
+  let embedded = 0;
+  for (;;) {
+    const rows = await prisma.$queryRaw<
+      { id: string; title: string; heading_path: string | null; content: string }[]
+    >(Prisma.sql`SELECT id, title, heading_path, content FROM chunks WHERE embedding IS NULL LIMIT ${batchSize}`);
+    if (rows.length === 0) break;
+    const vectors = await embedder.embedDocuments(
+      rows.map((r) => chunkEmbedText(r.title, r.heading_path, r.content)),
+    );
+    await Promise.all(
+      rows.map((r, i) =>
+        prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector WHERE id = ${r.id}`,
+      ),
+    );
+    embedded += rows.length;
+  }
+  return { embedded };
 }

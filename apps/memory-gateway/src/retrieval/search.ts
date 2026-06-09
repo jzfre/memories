@@ -4,12 +4,17 @@ import { loadConfig } from "../config/index";
 import { prisma } from "../db/client";
 import { resolveScope } from "../policy/index";
 import { writeAudit, writeTrace } from "../audit/index";
+import { getDefaultEmbedder, toVectorLiteral, type Embedder } from "../embed/index";
 
 export interface SearchArgs {
   query: string;
   namespaces?: string[];
   sensitivity_allowed?: string[];
   top_k?: number;
+}
+
+export interface SearchDeps {
+  embedder?: Embedder;
 }
 
 interface Row {
@@ -22,17 +27,28 @@ interface Row {
   status: string;
   review_state: string | null;
   snippet: string;
-  score: number;
 }
 
-export async function search(args: SearchArgs, ctx: { client: string }): Promise<SearchResponse> {
+// Reciprocal-rank-fusion constant. Larger = flatter contribution from deep ranks.
+const FUSE_K = 60;
+
+const HEADLINE_OPTS = "StartSel=**,StopSel=**,MaxFragments=2,MaxWords=30,MinWords=8";
+
+export async function search(
+  args: SearchArgs,
+  ctx: { client: string },
+  deps: SearchDeps = {},
+): Promise<SearchResponse> {
   const { actor } = loadConfig();
   const scope = resolveScope({
     namespaces: args.namespaces,
     sensitivityAllowed: args.sensitivity_allowed,
   });
   const topK = args.top_k ?? 10;
+  const embedder = deps.embedder ?? getDefaultEmbedder();
 
+  // Fail closed: an empty namespace OR sensitivity intersection denies without ever
+  // touching the corpus (no FTS, no vector), and still records the denial.
   if (scope.namespaces.length === 0 || scope.sensitivities.length === 0) {
     await writeAudit({
       actor,
@@ -54,68 +70,101 @@ export async function search(args: SearchArgs, ctx: { client: string }): Promise
     return { results: [], trace_id: traceId, safety_note: UNTRUSTED_CONTENT_NOTE };
   }
 
-  // Precision-first: websearch_to_tsquery ANDs terms (and supports quoted phrases).
-  const andQuery = Prisma.sql`websearch_to_tsquery('english', ${args.query})`;
-  // Recall fallback: turn the same lexemes into an OR query so a query that includes
-  // a word absent from the corpus still surfaces partial matches. plainto_tsquery
-  // sanitizes the input to lexemes joined by ' & '; swapping ' & '→' | ' yields a
-  // safe OR tsquery (no injection — it is cast from already-parsed lexemes).
-  const orQuery = Prisma.sql`replace(plainto_tsquery('english', ${args.query})::text, ' & ', ' | ')::tsquery`;
+  const candLimit = Math.max(topK * 4, 20);
+  const scopeWhere = Prisma.sql`
+    d.namespace IN (${Prisma.join(scope.namespaces)})
+    AND d.sensitivity IN (${Prisma.join(scope.sensitivities)})
+    AND d.status <> 'archived'`;
+  const headlineQ = Prisma.sql`websearch_to_tsquery('english', ${args.query})`;
 
-  const runQuery = (tsq: Prisma.Sql) =>
+  // ---- Full-text candidates (precision-first AND, OR-fallback for recall) ----
+  const ftsQuery = (tsq: Prisma.Sql) =>
     prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT
-        d.id AS document_id,
-        c.id AS chunk_id,
-        d.title AS title,
-        d.path AS path,
-        d.kind AS kind,
-        d.confidence AS confidence,
-        d.status AS status,
-        d.frontmatter->>'review_state' AS review_state,
-        ts_headline('english', coalesce(nullif(c.content, ''), c.title),
-          ${tsq}, 'StartSel=**,StopSel=**,MaxFragments=2,MaxWords=30,MinWords=8') AS snippet,
-        ts_rank(c.tsv, ${tsq}) AS score
+        d.id AS document_id, c.id AS chunk_id, d.title AS title, d.path AS path, d.kind AS kind,
+        d.confidence AS confidence, d.status AS status, d.frontmatter->>'review_state' AS review_state,
+        ts_headline('english', coalesce(nullif(c.content, ''), c.title), ${tsq}, ${HEADLINE_OPTS}) AS snippet
       FROM chunks c
       JOIN documents d ON d.id = c.document_id
-      WHERE c.tsv @@ ${tsq}
-        AND d.namespace IN (${Prisma.join(scope.namespaces)})
-        AND d.sensitivity IN (${Prisma.join(scope.sensitivities)})
-        AND d.status <> 'archived'
-      ORDER BY score DESC
-      LIMIT ${topK}
-    `);
+      WHERE c.tsv @@ ${tsq} AND ${scopeWhere}
+      ORDER BY ts_rank(c.tsv, ${tsq}) DESC
+      LIMIT ${candLimit}`);
 
-  let rows = await runQuery(andQuery);
+  const andQuery = Prisma.sql`websearch_to_tsquery('english', ${args.query})`;
+  const orQuery = Prisma.sql`replace(plainto_tsquery('english', ${args.query})::text, ' & ', ' | ')::tsquery`;
+  let ftsRows = await ftsQuery(andQuery);
   let usedOrFallback = false;
-  if (rows.length === 0) {
-    rows = await runQuery(orQuery);
+  if (ftsRows.length === 0) {
+    ftsRows = await ftsQuery(orQuery);
     usedOrFallback = true;
   }
 
-  const results = rows.map((r) => ({
-    document_id: r.document_id,
-    chunk_id: r.chunk_id,
-    title: r.title,
-    snippet: r.snippet,
-    score: Number(r.score),
+  // ---- Vector candidates (best-effort; semantic recall) ----
+  let vecRows: Row[] = [];
+  let vectorUsed = false;
+  try {
+    if (embedder.dim > 0 && (await embedder.available())) {
+      const qvec = toVectorLiteral(await embedder.embedQuery(args.query));
+      vecRows = await prisma.$queryRaw<Row[]>(Prisma.sql`
+        SELECT
+          d.id AS document_id, c.id AS chunk_id, d.title AS title, d.path AS path, d.kind AS kind,
+          d.confidence AS confidence, d.status AS status, d.frontmatter->>'review_state' AS review_state,
+          ts_headline('english', coalesce(nullif(c.content, ''), c.title), ${headlineQ}, ${HEADLINE_OPTS}) AS snippet
+        FROM chunks c
+        JOIN documents d ON d.id = c.document_id
+        WHERE c.embedding IS NOT NULL AND ${scopeWhere}
+        ORDER BY c.embedding <=> ${qvec}::vector ASC
+        LIMIT ${candLimit}`);
+      vectorUsed = true;
+    }
+  } catch {
+    // Embedding endpoint unavailable/slow — degrade gracefully to full-text only.
+  }
+
+  // ---- Reciprocal-rank fusion across the two ranked candidate lists ----
+  const fused = new Map<string, { row: Row; score: number }>();
+  const fuse = (rows: Row[]) =>
+    rows.forEach((row, i) => {
+      const inc = 1 / (FUSE_K + i + 1);
+      const e = fused.get(row.chunk_id);
+      if (e) e.score += inc;
+      else fused.set(row.chunk_id, { row, score: inc });
+    });
+  fuse(ftsRows);
+  fuse(vecRows);
+  const ranked = [...fused.values()].sort((a, b) => b.score - a.score).slice(0, topK);
+
+  const results = ranked.map(({ row, score }) => ({
+    document_id: row.document_id,
+    chunk_id: row.chunk_id,
+    title: row.title,
+    snippet: row.snippet,
+    score,
     source: {
-      path: r.path,
-      kind: r.kind,
-      confidence: r.confidence,
-      status: r.status,
-      review_state: r.review_state,
+      path: row.path,
+      kind: row.kind,
+      confidence: row.confidence,
+      status: row.status,
+      review_state: row.review_state,
     },
   }));
 
-  const documentIds = [...new Set(rows.map((r) => r.document_id))];
+  const selectedChunkIds = ranked.map((r) => r.row.chunk_id);
+  const documentIds = [...new Set(ranked.map((r) => r.row.document_id))];
   const traceId = await writeTrace({
     actor,
     query: args.query,
     namespaceFilter: scope.namespaces,
-    selectedChunkIds: rows.map((r) => r.chunk_id),
+    selectedChunkIds,
     selectedDocumentIds: documentIds,
-    rankingDebug: { top_k: topK, ranking: "ts_rank", weighted: true, or_fallback: usedOrFallback },
+    rankingDebug: {
+      top_k: topK,
+      ranking: "hybrid_rrf",
+      vector: vectorUsed,
+      or_fallback: usedOrFallback,
+      fts_candidates: ftsRows.length,
+      vector_candidates: vecRows.length,
+    },
   });
   await writeAudit({
     actor,

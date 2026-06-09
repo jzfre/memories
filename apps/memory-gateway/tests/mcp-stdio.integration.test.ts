@@ -45,6 +45,7 @@ beforeAll(async () => {
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? "",
       MEMORIES_CONFIG: FIXTURE_CONFIG,
       VAULT_ROOT: VAULT,
+      EMBEDDINGS_ENABLED: "0", // keep the spawned server full-text-only (no LLM dependency)
     },
   });
   client = new Client({ name: "stdio-itest", version: "0.0.0" });

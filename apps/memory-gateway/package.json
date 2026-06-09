@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "scan": "tsx src/cli/index.ts scan",
+    "reembed": "tsx src/cli/index.ts reembed",
     "api": "tsx watch src/api/server.ts",
     "mcp": "tsx src/mcp/index.ts",
     "typecheck": "tsc --noEmit",
