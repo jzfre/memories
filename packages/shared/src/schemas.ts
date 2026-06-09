@@ -41,9 +41,7 @@ export const SearchResult = z.object({
   snippet: z.string(),
   score: z.number(),
   source: SearchResultSource,
-  // Optional in the type so the schema is valid before Task 7 wires it in; search
-  // populates it on every result from Task 7 onward.
-  freshness: Freshness.optional(),
+  freshness: Freshness,
 });
 export type SearchResult = z.infer<typeof SearchResult>;
 

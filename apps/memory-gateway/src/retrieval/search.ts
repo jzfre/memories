@@ -5,6 +5,7 @@ import { prisma } from "../db/client";
 import { resolveScope } from "../policy/index";
 import { writeAudit, writeTrace } from "../audit/index";
 import { getDefaultEmbedder, toVectorLiteral, type Embedder } from "../embed/index";
+import { deriveEmbeddingFreshness } from "../status/index";
 
 export interface SearchArgs {
   query: string;
@@ -27,12 +28,33 @@ interface Row {
   status: string;
   review_state: string | null;
   snippet: string;
+  validation_status: string;
+  embedding_status: string;
+  embedded_at: Date | null;
+  updated_at: Date;
 }
 
 // Reciprocal-rank-fusion constant. Larger = flatter contribution from deep ranks.
 const FUSE_K = 60;
 
 const HEADLINE_OPTS = "StartSel=**,StopSel=**,MaxFragments=2,MaxWords=30,MinWords=8";
+
+function freshnessOf(row: Row): { validation: "valid" | "incomplete" | "invalid"; embedding: ReturnType<typeof deriveEmbeddingFreshness> } {
+  return {
+    validation: row.validation_status as "valid" | "incomplete" | "invalid",
+    embedding: deriveEmbeddingFreshness({
+      embeddingStatus: row.embedding_status,
+      embeddedAt: row.embedded_at,
+      updatedAt: row.updated_at,
+    }),
+  };
+}
+
+function freshnessPenalty(f: { validation: string; embedding: string }): number {
+  const v = f.validation === "incomplete" ? 0.9 : f.validation === "invalid" ? 0.8 : 1;
+  const e = f.embedding === "stale" ? 0.85 : 1;
+  return v * e;
+}
 
 export async function search(
   args: SearchArgs,
@@ -83,6 +105,10 @@ export async function search(
       SELECT
         d.id AS document_id, c.id AS chunk_id, d.title AS title, d.path AS path, d.kind AS kind,
         d.confidence AS confidence, d.status AS status, d.frontmatter->>'review_state' AS review_state,
+        d.validation_status AS validation_status,
+        d.embedding_status AS embedding_status,
+        d.embedded_at AS embedded_at,
+        d.updated_at AS updated_at,
         ts_headline('english', coalesce(nullif(c.content, ''), c.title), ${tsq}, ${HEADLINE_OPTS}) AS snippet
       FROM chunks c
       JOIN documents d ON d.id = c.document_id
@@ -109,6 +135,10 @@ export async function search(
         SELECT
           d.id AS document_id, c.id AS chunk_id, d.title AS title, d.path AS path, d.kind AS kind,
           d.confidence AS confidence, d.status AS status, d.frontmatter->>'review_state' AS review_state,
+          d.validation_status AS validation_status,
+          d.embedding_status AS embedding_status,
+          d.embedded_at AS embedded_at,
+          d.updated_at AS updated_at,
           ts_headline('english', coalesce(nullif(c.content, ''), c.title), ${headlineQ}, ${HEADLINE_OPTS}) AS snippet
         FROM chunks c
         JOIN documents d ON d.id = c.document_id
@@ -132,7 +162,10 @@ export async function search(
     });
   fuse(ftsRows);
   fuse(vecRows);
-  const ranked = [...fused.values()].sort((a, b) => b.score - a.score).slice(0, topK);
+  const ranked = [...fused.values()]
+    .map(({ row, score }) => ({ row, score: score * freshnessPenalty(freshnessOf(row)) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
 
   const results = ranked.map(({ row, score }) => ({
     document_id: row.document_id,
@@ -147,6 +180,7 @@ export async function search(
       status: row.status,
       review_state: row.review_state,
     },
+    freshness: freshnessOf(row),
   }));
 
   const selectedChunkIds = ranked.map((r) => r.row.chunk_id);
@@ -164,6 +198,7 @@ export async function search(
       or_fallback: usedOrFallback,
       fts_candidates: ftsRows.length,
       vector_candidates: vecRows.length,
+      penalty: true,
     },
   });
   await writeAudit({
