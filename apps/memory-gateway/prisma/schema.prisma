@@ -21,8 +21,14 @@ model Document {
   bodyText    String    @map("body_text")
   createdAt   DateTime  @map("created_at") @db.Timestamptz()
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz()
-  indexedAt   DateTime? @map("indexed_at") @db.Timestamptz()
-  chunks      Chunk[]
+  indexedAt        DateTime? @map("indexed_at") @db.Timestamptz()
+  parseStatus      String    @default("parsed") @map("parse_status")
+  validationStatus String    @default("valid") @map("validation_status")
+  validationIssues Json      @default("[]") @map("validation_issues")
+  embeddingStatus  String    @default("disabled") @map("embedding_status")
+  embeddedAt       DateTime? @map("embedded_at") @db.Timestamptz()
+  lastError        String?   @map("last_error")
+  chunks           Chunk[]
 
   @@index([namespace])
   @@index([sensitivity])
