@@ -23,6 +23,8 @@ describe("search freshness + penalty", () => {
     // Same keyword in both. 'valid.md' has full metadata; 'nometa.md' is incomplete.
     writeFileSync(join(dir, "personal", "valid.md"), `---\nnamespace: personal\nsensitivity: private\n---\n# Valid\n\nzimbabwe keyword body`);
     writeFileSync(join(dir, "personal", "nometa.md"), `# No meta\n\nzimbabwe keyword body`);
+    // Malformed frontmatter -> validationStatus 'invalid'; namespace defaults to personal (in scope).
+    writeFileSync(join(dir, "personal", "bad.md"), `---\na: b: c\n---\n# Bad\n\nzimbabwe keyword body`);
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -41,5 +43,14 @@ describe("search freshness + penalty", () => {
     const res = await search({ query: "zimbabwe" }, { client: "test" });
     const ids = res.results.map((r) => r.document_id);
     expect(ids.indexOf("personal.valid")).toBeLessThan(ids.indexOf("personal.nometa"));
+  });
+
+  it("ranks an otherwise-equal valid note above an invalid (malformed-frontmatter) one", async () => {
+    const search = await seed(dir);
+    const res = await search({ query: "zimbabwe" }, { client: "test" });
+    const bad = res.results.find((r) => r.document_id === "personal.bad");
+    expect(bad?.freshness.validation).toBe("invalid");
+    const ids = res.results.map((r) => r.document_id);
+    expect(ids.indexOf("personal.valid")).toBeLessThan(ids.indexOf("personal.bad"));
   });
 });

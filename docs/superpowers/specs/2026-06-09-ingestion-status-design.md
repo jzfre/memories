@@ -134,7 +134,7 @@ In `src/retrieval/search.ts`:
   (`SearchResultSource` stays as-is; `freshness` is a new sibling field on `SearchResult`,
   added to the Zod schema in `@memories/shared`.)
 - **Ranking penalty**, applied multiplicatively to the fused RRF score *after* fusion:
-  `incomplete` ×0.9, `stale` ×0.85 (compounding if both). `valid`+`current` = ×1.0.
+  `incomplete` ×0.9, `invalid` ×0.8, `stale` ×0.85 (compounding). `valid`+`current` = ×1.0.
   Starting weights, tunable later; light enough to only reorder near-ties.
 - Denial / empty-scope path is unchanged.
 

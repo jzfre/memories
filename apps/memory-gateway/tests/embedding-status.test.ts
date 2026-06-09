@@ -18,6 +18,14 @@ class FixedEmbedder implements Embedder {
   async embedQuery() { return this.vec(); }
 }
 
+// Available, but every embed call fails — exercises the best-effort error path.
+class FailingEmbedder implements Embedder {
+  readonly dim = 768;
+  async available() { return true; }
+  async embedDocuments(): Promise<number[][]> { throw new Error("embed boom"); }
+  async embedQuery(): Promise<number[]> { throw new Error("embed boom"); }
+}
+
 async function scanFor(vaultRoot: string, deps: { embedder?: Embedder }) {
   process.env.VAULT_ROOT = vaultRoot;
   const { __resetConfigCache } = await import("../src/config/index");
@@ -50,6 +58,15 @@ describe("embedding status", () => {
     const d = await prisma.document.findFirstOrThrow({ where: { path: "personal/a.md" } });
     expect(d.embeddingStatus).toBe("current");
     expect(d.embeddedAt).not.toBeNull();
+  });
+
+  it("records 'error' + lastError and counts embedErrors when embedding throws", async () => {
+    const scan = await scanFor(dir, { embedder: new FailingEmbedder() });
+    const report = await scan();
+    expect(report.embedErrors).toBeGreaterThanOrEqual(1);
+    const d = await prisma.document.findFirstOrThrow({ where: { path: "personal/a.md" } });
+    expect(d.embeddingStatus).toBe("error");
+    expect(d.lastError).toContain("embed boom");
   });
 
   it("embedPending advances a pending document to current", async () => {
