@@ -35,6 +35,7 @@ model Chunk {
   chunkIndex  Int                      @map("chunk_index")
   headingPath String?                  @map("heading_path")
   title       String                   @default("")
+  meta        String                   @default("")
   content     String
   tokenCount  Int?                     @map("token_count")
   tsv         Unsupported("tsvector")?

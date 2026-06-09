@@ -88,6 +88,7 @@ export async function scanVault(opts: { dryRun?: boolean; client?: string } = {}
             chunkIndex: c.chunkIndex,
             headingPath: c.headingPath,
             title,
+            meta: [frontmatter.namespace, frontmatter.kind, ...frontmatter.tags].filter(Boolean).join(" "),
             content: c.content,
             tokenCount: c.tokenCount,
           })),

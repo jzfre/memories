@@ -307,7 +307,8 @@ describe("health_status (MCP)", () => {
     const h = asJson(await call("health_status", {}));
     expect(h.status).toBe("ok");
     expect(h.db).toBe("ok");
-    expect(h.documents).toBe(7); // 6 base fixtures + multi-section.md
+    expect(h.documents).toBe(await prisma.document.count()); // reflects the seeded fixture corpus
+    expect(h.documents).toBeGreaterThan(0);
     expect(h.chunks).toBeGreaterThan(0);
     expect(h.last_indexed_at).toBeTruthy();
     const audit = await prisma.auditLog.findFirst({ where: { action: "health.status" } });

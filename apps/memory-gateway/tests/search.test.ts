@@ -77,4 +77,13 @@ describe("search quality (title/heading indexing + OR fallback)", () => {
     const res = await search({ query: "pgvector zqxbogusterm" }, { client: "rest" });
     expect(res.results.length).toBeGreaterThan(0);
   });
+
+  it("finds a document by a word present only in its metadata (tag/namespace/kind)", async () => {
+    // The fixture 'tagged' note has tag 'roadmap' but the word appears nowhere in its
+    // title or body. This is the class of miss that hid the brain-gym note (searching
+    // 'brain gym' could not reach a note whose only signal was its namespace/folder).
+    const search = await seedAndImport();
+    const res = await search({ query: "roadmap" }, { client: "rest" });
+    expect(res.results.some((r) => r.document_id.includes("tagged"))).toBe(true);
+  });
 });
