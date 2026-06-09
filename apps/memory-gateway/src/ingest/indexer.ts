@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { checksum, chunkId, chunkMarkdown, documentIdFromPath, parseNote } from "@memories/shared";
+import type { ValidationIssue, ParseStatus, ValidationStatus } from "@memories/shared";
 import { loadConfig } from "../config/index";
 import { prisma } from "../db/client";
 import { writeAudit } from "../audit/index";
@@ -13,6 +14,8 @@ export interface ScanReport {
   archived: number;
   embedded: number;
   embedErrors: number;
+  incomplete: number;
+  invalid: number;
   warnings: { path: string; messages: string[] }[];
 }
 
@@ -25,6 +28,27 @@ function chunkEmbedText(title: string, headingPath: string | null, content: stri
   return [title, headingPath ?? "", content].filter(Boolean).join("\n");
 }
 
+function deriveValidation(warnings: string[]): {
+  parseStatus: ParseStatus;
+  validationStatus: ValidationStatus;
+  issues: ValidationIssue[];
+} {
+  const parseErr = warnings.find((w) => w.startsWith("frontmatter parse error"));
+  if (parseErr) {
+    return {
+      parseStatus: "error",
+      validationStatus: "invalid",
+      issues: [{ code: "frontmatter_parse_error", message: parseErr }],
+    };
+  }
+  const issues: ValidationIssue[] = [];
+  for (const w of warnings) {
+    if (w.includes("missing 'namespace'")) issues.push({ code: "missing_namespace", message: w });
+    if (w.includes("missing 'sensitivity'")) issues.push({ code: "missing_sensitivity", message: w });
+  }
+  return { parseStatus: "parsed", validationStatus: issues.length ? "incomplete" : "valid", issues };
+}
+
 export async function scanVault(
   opts: { dryRun?: boolean; client?: string } = {},
   deps: IngestDeps = {},
@@ -35,7 +59,7 @@ export async function scanVault(
     sensitivity: config.policy.default_sensitivity,
   };
   const files = scanVaultFiles(config.vault.root);
-  const report: ScanReport = { added: 0, updated: 0, skipped: 0, archived: 0, embedded: 0, embedErrors: 0, warnings: [] };
+  const report: ScanReport = { added: 0, updated: 0, skipped: 0, archived: 0, embedded: 0, embedErrors: 0, incomplete: 0, invalid: 0, warnings: [] };
   const seenIds = new Set<string>();
 
   // Embeddings are best-effort: probe once, and skip silently if unavailable.
@@ -45,6 +69,7 @@ export async function scanVault(
   for (const f of files) {
     const sum = checksum(f.content);
     const { frontmatter, title, body, warnings } = parseNote(f.content, f.relPath, defaults);
+    const validation = deriveValidation(warnings);
     const id = frontmatter.id ?? documentIdFromPath(f.relPath);
     seenIds.add(id);
     if (warnings.length) report.warnings.push({ path: f.relPath, messages: warnings });
@@ -78,6 +103,9 @@ export async function scanVault(
           confidence: frontmatter.confidence,
           checksum: sum,
           frontmatter: frontmatter.raw as Prisma.InputJsonValue,
+          parseStatus: validation.parseStatus,
+          validationStatus: validation.validationStatus,
+          validationIssues: validation.issues as unknown as Prisma.InputJsonValue,
           bodyText: body,
           createdAt: now,
           updatedAt: now,
@@ -93,6 +121,9 @@ export async function scanVault(
           confidence: frontmatter.confidence,
           checksum: sum,
           frontmatter: frontmatter.raw as Prisma.InputJsonValue,
+          parseStatus: validation.parseStatus,
+          validationStatus: validation.validationStatus,
+          validationIssues: validation.issues as unknown as Prisma.InputJsonValue,
           bodyText: body,
           updatedAt: now,
           indexedAt: now,
@@ -132,6 +163,8 @@ export async function scanVault(
       }
     }
     existing ? report.updated++ : report.added++;
+    if (validation.validationStatus === "incomplete") report.incomplete++;
+    if (validation.validationStatus === "invalid") report.invalid++;
   }
 
   if (!opts.dryRun) {

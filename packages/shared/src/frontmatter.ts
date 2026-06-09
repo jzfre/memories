@@ -28,7 +28,9 @@ export function parseNote(raw: string, relPath: string, defaults: ParseDefaults)
   let body = raw;
 
   try {
-    const parsed = matter(raw);
+    // Pass an explicit options object to bypass gray-matter's module-level cache,
+    // which would return a stale pre-parse entry if a previous call threw during parseMatter.
+    const parsed = matter(raw, {});
     data = (parsed.data ?? {}) as Record<string, unknown>;
     body = parsed.content ?? "";
   } catch (e) {
