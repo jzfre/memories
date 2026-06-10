@@ -269,3 +269,34 @@ describe("REST API — proposals endpoints", () => {
     await app.close();
   });
 });
+
+describe("REST API — audit search endpoint", () => {
+  beforeEach(async () => {
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "proposals","knowledge_events","audit_log","chunks","documents","retrieval_traces" RESTART IDENTITY CASCADE',
+    );
+  });
+
+  it("GET /audit?action=memory.search returns only that action", async () => {
+    const app = await buildAndSeed();
+
+    // Trigger a search so an audit row exists
+    await app.inject({
+      method: "POST",
+      url: "/memory/search",
+      payload: { query: "pgvector" },
+    });
+
+    // Also trigger a different action
+    await app.inject({ method: "GET", url: "/status" });
+
+    const res = await app.inject({ method: "GET", url: "/audit?action=memory.search" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThanOrEqual(1);
+    expect(body.every((r: { action: string }) => r.action === "memory.search")).toBe(true);
+
+    await app.close();
+  });
+});

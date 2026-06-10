@@ -172,3 +172,38 @@ describe("cli proposals commands", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("cli runAuditSearch", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "proposals","knowledge_events","audit_log","chunks","documents","retrieval_traces" RESTART IDENTITY CASCADE',
+    );
+    dir = mkdtempSync(join(tmpdir(), "memvault-cli-audit-"));
+    mkdirSync(join(dir, "personal"), { recursive: true });
+    process.env.MEMORIES_CONFIG = FIXTURE_CONFIG;
+    process.env.VAULT_ROOT = dir;
+    const { __resetConfigCache } = await import("../src/config/index");
+    __resetConfigCache();
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("runAuditSearch returns rows filtered by action after performing a search", async () => {
+    // Trigger a search so an audit row with action "memory.search" is created
+    const { search } = await import("../src/retrieval/search");
+    await search({ query: "pgvector", namespaces: ["personal"] }, { client: "test" });
+
+    const { runAuditSearch } = await import("../src/cli/index");
+
+    // Filter by the exact action — should return at least one row
+    const rows = await runAuditSearch({ action: "memory.search" });
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.every((r) => r.action === "memory.search")).toBe(true);
+
+    // Filter by a different action — should return zero rows
+    const none = await runAuditSearch({ action: "some.other.action" });
+    expect(none.length).toBe(0);
+  });
+});

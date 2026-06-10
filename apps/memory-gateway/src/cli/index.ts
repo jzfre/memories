@@ -7,6 +7,7 @@ import {
   type Proposal,
   type ReviewResult,
 } from "../proposals/index";
+import { searchAudit, type AuditSearchFilter, type AuditRow } from "../audit/search";
 import { loadConfig } from "../config/index";
 
 export async function runScan(opts: { dryRun: boolean }): Promise<ScanReport> {
@@ -38,9 +39,40 @@ export async function runReviewProposal(
   return reviewProposal(id, { action, reviewerNotes: notes, reviewedBy }, { client: "cli" });
 }
 
+export async function runAuditSearch(filter: AuditSearchFilter): Promise<AuditRow[]> {
+  return searchAudit(filter);
+}
+
 function isEntrypoint(): boolean {
   // True only when this file is the process entrypoint; false when imported by tests.
   return Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]!).href;
+}
+
+function printAuditTable(rows: AuditRow[]): void {
+  if (rows.length === 0) {
+    console.log("(no audit records)");
+    return;
+  }
+  const header = [
+    "created_at".padEnd(24),
+    "action".padEnd(30),
+    "client".padEnd(15),
+    "approved".padEnd(9),
+    "namespace",
+  ].join("  ");
+  console.log(header);
+  console.log("-".repeat(header.length + 8));
+  for (const r of rows) {
+    console.log(
+      [
+        r.createdAt.toISOString().padEnd(24),
+        r.action.padEnd(30),
+        r.client.padEnd(15),
+        String(r.approved ?? "null").padEnd(9),
+        r.namespace,
+      ].join("  "),
+    );
+  }
 }
 
 function printProposalsTable(proposals: Proposal[]): void {
@@ -149,7 +181,30 @@ async function main(): Promise<void> {
     printProposalsTable(proposals);
     process.exit(0);
   }
-  console.error("Usage: memories <scan [--dry-run] | reembed | rebuild | status | proposals [--state <s>] | proposals review <id> --approve|--reject|--needs-evidence [--notes \"…\"]>");
+  if (cmd === "audit") {
+    const actionIdx = args.indexOf("--action");
+    const actionFilter = actionIdx !== -1 ? args[actionIdx + 1] : undefined;
+    const clientIdx = args.indexOf("--client");
+    const clientFilter = clientIdx !== -1 ? args[clientIdx + 1] : undefined;
+    const approvedIdx = args.indexOf("--approved");
+    const approvedRaw = approvedIdx !== -1 ? args[approvedIdx + 1] : undefined;
+    let approvedFilter: boolean | undefined;
+    if (approvedRaw === "true") approvedFilter = true;
+    else if (approvedRaw === "false") approvedFilter = false;
+    const limitIdx = args.indexOf("--limit");
+    const limitRaw = limitIdx !== -1 ? args[limitIdx + 1] : undefined;
+    const limitFilter = limitRaw !== undefined ? parseInt(limitRaw, 10) : undefined;
+
+    const rows = await runAuditSearch({
+      action: actionFilter,
+      client: clientFilter,
+      approved: approvedFilter,
+      limit: Number.isFinite(limitFilter) ? limitFilter : undefined,
+    });
+    printAuditTable(rows);
+    process.exit(0);
+  }
+  console.error("Usage: memories <scan [--dry-run] | reembed | rebuild | status | proposals [--state <s>] | proposals review <id> --approve|--reject|--needs-evidence [--notes \"…\"] | audit [--action x] [--client y] [--approved true|false] [--limit n]>");
   process.exit(1);
 }
 

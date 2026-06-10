@@ -6,6 +6,7 @@ import { healthStatus } from "../health/index";
 import { scanVault } from "../ingest/indexer";
 import { computeIndexStatus } from "../status/index";
 import { writeAudit } from "../audit/index";
+import { searchAudit } from "../audit/search";
 import { loadConfig } from "../config/index";
 import { createProposal, listProposals, reviewProposal } from "../proposals/index";
 import {
@@ -126,6 +127,33 @@ export function buildApp(): FastifyInstance {
       return reply.code(404).send({ error: "proposal not found" });
     }
     return result;
+  });
+
+  // ---------------------------------------------------------------------------
+  // Audit search endpoint — NOT itself audited (avoid recursion noise)
+  // ---------------------------------------------------------------------------
+
+  app.get("/audit", async (req) => {
+    const query = (req.query ?? {}) as {
+      action?: string;
+      client?: string;
+      approved?: string;
+      limit?: string;
+    };
+
+    let approved: boolean | undefined;
+    if (query.approved === "true") approved = true;
+    else if (query.approved === "false") approved = false;
+
+    const rawLimit = query.limit !== undefined ? parseInt(query.limit, 10) : undefined;
+    const limit = rawLimit !== undefined && Number.isFinite(rawLimit) ? rawLimit : undefined;
+
+    return searchAudit({
+      action: query.action,
+      client: query.client,
+      approved,
+      limit,
+    });
   });
 
   // ---------------------------------------------------------------------------
