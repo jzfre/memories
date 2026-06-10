@@ -94,6 +94,12 @@ async function main(): Promise<void> {
         console.log(`  ${i.path}\t${i.validationStatus}\t${i.embeddingStatus}\t${codes}`);
       }
     }
+    if (s.stale_documents.length) {
+      console.log(`\nneeds review (stale):`);
+      for (const d of s.stale_documents) {
+        console.log(`  ${d.path} · ${d.kind} · ${d.updatedAt.toISOString().slice(0, 10)}`);
+      }
+    }
     process.exit(0);
   }
   if (cmd === "rebuild") {
