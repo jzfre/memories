@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { prisma } from "../db/client";
 import { loadConfig } from "../config/index";
 import { writeAudit } from "../audit/index";
+import { scanVault } from "../ingest/indexer";
+import { documentIdFromPath } from "@memories/shared";
 import type { Proposal } from "@prisma/client";
 
 export type { Proposal };
@@ -217,4 +221,249 @@ export async function listProposals(
 
 export async function getProposal(id: string): Promise<Proposal | null> {
   return prisma.proposal.findUnique({ where: { id } });
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function frontmatterDate(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function buildNoteFrontmatter(p: Proposal): string {
+  const lines = [
+    "---",
+    `kind: ${p.kind}`,
+    `namespace: ${p.namespace}`,
+    `sensitivity: ${p.sensitivity}`,
+    `status: active`,
+    `confidence: ${p.confidence}`,
+    `source_type: proposal`,
+    `tags: []`,
+    "---",
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * Find the end of the frontmatter block (the position of the character after the
+ * closing "---\n") and return the character offset.  Returns null if the file
+ * has no leading frontmatter block.
+ */
+function frontmatterEndOffset(content: string): number | null {
+  if (!content.startsWith("---")) return null;
+  const firstNewline = content.indexOf("\n");
+  if (firstNewline === -1) return null;
+  // Search for the second "---" line
+  const rest = content.slice(firstNewline + 1);
+  const match = rest.match(/^---[ \t]*$/m);
+  if (!match || match.index === undefined) return null;
+  const closingStart = firstNewline + 1 + match.index;
+  // Skip past "---\n"
+  const closingEnd = closingStart + 3; // "---"
+  // Consume optional trailing newline(s)
+  let off = closingEnd;
+  if (content[off] === "\r") off++;
+  if (content[off] === "\n") off++;
+  return off;
+}
+
+// ---------------------------------------------------------------------------
+// reviewProposal
+// ---------------------------------------------------------------------------
+
+export interface ReviewDecision {
+  action: "approve" | "reject" | "needs_more_evidence";
+  reviewerNotes?: string;
+  reviewedBy: string;
+}
+
+export interface ReviewResult {
+  proposal_id: string;
+  review_state: string;
+  document_path?: string;
+}
+
+export async function reviewProposal(
+  id: string,
+  decision: ReviewDecision,
+  ctx: { client: string },
+): Promise<ReviewResult | null> {
+  const config = loadConfig();
+  const { actor } = config;
+
+  const proposal = await prisma.proposal.findUnique({ where: { id } });
+  if (!proposal) return null;
+
+  const allowedInitialStates = ["pending_review", "needs_more_evidence"];
+  if (!allowedInitialStates.includes(proposal.reviewState)) {
+    throw new Error(
+      `Proposal ${id} is already in state "${proposal.reviewState}" and cannot be reviewed again.`,
+    );
+  }
+
+  const { action, reviewerNotes, reviewedBy } = decision;
+  const reviewedAt = new Date();
+
+  // --- reject / needs_more_evidence ---
+  if (action === "reject" || action === "needs_more_evidence") {
+    const newState = action === "reject" ? "rejected" : "needs_more_evidence";
+    await prisma.proposal.update({
+      where: { id },
+      data: {
+        reviewState: newState,
+        reviewerNotes: reviewerNotes ?? null,
+        reviewedBy,
+        reviewedAt,
+      },
+    });
+    await writeAudit({
+      actor,
+      client: ctx.client,
+      action: "proposal.review",
+      namespace: proposal.namespace,
+      sensitivityRequested: proposal.sensitivity,
+      inputs: { proposalId: id, action },
+      returnedDocumentIds: [],
+      approved: false,
+    });
+    return { proposal_id: id, review_state: newState };
+  }
+
+  // --- approve ---
+  if (proposal.proposalType === "patch") {
+    return approvePatched(proposal, { actor, reviewedBy, reviewerNotes, reviewedAt, ctx });
+  }
+  return approveNote(proposal, { actor, reviewedBy, reviewerNotes, reviewedAt, ctx });
+}
+
+async function approveNote(
+  proposal: Proposal,
+  opts: { actor: string; reviewedBy: string; reviewerNotes?: string; reviewedAt: Date; ctx: { client: string } },
+): Promise<ReviewResult> {
+  const config = loadConfig();
+  const vaultRoot = config.vault.root;
+
+  // Build filename
+  const dateStr = frontmatterDate(proposal.createdAt);
+  const slug = slugify(proposal.title);
+  const baseName = `${dateStr}-${slug}`;
+  const reviewedDir = join(vaultRoot, "00-inbox", "reviewed");
+  mkdirSync(reviewedDir, { recursive: true });
+
+  // Collision-safe filename
+  let fileName = `${baseName}.md`;
+  let suffix = 2;
+  while (existsSync(join(reviewedDir, fileName))) {
+    fileName = `${baseName}-${suffix}.md`;
+    suffix++;
+  }
+
+  const filePath = join(reviewedDir, fileName);
+  const relPath = `00-inbox/reviewed/${fileName}`;
+
+  // Build markdown
+  const fm = buildNoteFrontmatter(proposal);
+  const md = `${fm}\n\n# ${proposal.title}\n\n${proposal.proposedContent}\n`;
+  writeFileSync(filePath, md, "utf8");
+
+  // Re-index vault
+  await scanVault({}, {});
+
+  // Derive the document id
+  const docId = documentIdFromPath(relPath);
+
+  // Update proposal
+  await prisma.proposal.update({
+    where: { id: proposal.id },
+    data: {
+      reviewState: "merged",
+      reviewerNotes: opts.reviewerNotes ?? null,
+      reviewedBy: opts.reviewedBy,
+      reviewedAt: opts.reviewedAt,
+    },
+  });
+
+  await writeAudit({
+    actor: opts.actor,
+    client: opts.ctx.client,
+    action: "proposal.review",
+    namespace: proposal.namespace,
+    sensitivityRequested: proposal.sensitivity,
+    inputs: { proposalId: proposal.id, action: "approve" },
+    returnedDocumentIds: [docId],
+    approved: true,
+  });
+
+  return { proposal_id: proposal.id, review_state: "merged", document_path: relPath };
+}
+
+async function approvePatched(
+  proposal: Proposal,
+  opts: { actor: string; reviewedBy: string; reviewerNotes?: string; reviewedAt: Date; ctx: { client: string } },
+): Promise<ReviewResult> {
+  const config = loadConfig();
+  const vaultRoot = config.vault.root;
+
+  if (!proposal.targetDocumentId) {
+    throw new Error(`Patch proposal ${proposal.id} has no targetDocumentId.`);
+  }
+
+  const doc = await prisma.document.findUnique({ where: { id: proposal.targetDocumentId } });
+  if (!doc) {
+    throw new Error(`Target document ${proposal.targetDocumentId} not found in index.`);
+  }
+
+  const filePath = join(vaultRoot, doc.path);
+  const originalContent = readFileSync(filePath, "utf8");
+
+  // Replace body after frontmatter, or whole content if no frontmatter
+  const fmEnd = frontmatterEndOffset(originalContent);
+  let newContent: string;
+  if (fmEnd !== null) {
+    const fmBlock = originalContent.slice(0, fmEnd);
+    newContent = `${fmBlock}\n${proposal.proposedContent}\n`;
+  } else {
+    newContent = `${proposal.proposedContent}\n`;
+  }
+
+  writeFileSync(filePath, newContent, "utf8");
+
+  // Re-index vault
+  await scanVault({}, {});
+
+  // Update proposal
+  await prisma.proposal.update({
+    where: { id: proposal.id },
+    data: {
+      reviewState: "merged",
+      reviewerNotes: opts.reviewerNotes ?? null,
+      reviewedBy: opts.reviewedBy,
+      reviewedAt: opts.reviewedAt,
+    },
+  });
+
+  await writeAudit({
+    actor: opts.actor,
+    client: opts.ctx.client,
+    action: "proposal.review",
+    namespace: proposal.namespace,
+    sensitivityRequested: proposal.sensitivity,
+    inputs: { proposalId: proposal.id, action: "approve" },
+    returnedDocumentIds: [proposal.targetDocumentId],
+    approved: true,
+  });
+
+  return { proposal_id: proposal.id, review_state: "merged" };
 }
