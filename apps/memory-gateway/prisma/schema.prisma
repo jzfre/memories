@@ -112,6 +112,9 @@ model Proposal {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   reviewedBy        String?   @map("reviewed_by")
   reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz()
+  validationFlags   Json      @default("[]") @map("validation_flags")
+  score             Int?
+  autoPolicy        String?   @map("auto_policy")
 
   @@index([reviewState], map: "proposals_review_state_idx")
   @@index([namespace], map: "proposals_namespace_idx")
