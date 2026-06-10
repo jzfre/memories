@@ -45,7 +45,7 @@ All commands run from the repo root via pnpm scripts:
 |-------------------------------------------------------|-----------------------------------------------------------|
 | `pnpm scan`                                           | Ingest / re-ingest vault into Postgres index              |
 | `pnpm scan -- --dry-run`                              | Preview what would change without writing                 |
-| `pnpm rebuild`                                        | Archive all documents and re-scan from scratch            |
+| `pnpm rebuild`                                        | Wipe the derived index and re-scan from scratch           |
 | `pnpm reembed`                                        | Backfill embeddings for chunks that lack one              |
 | `pnpm status`                                         | Show document/chunk/embedding/validation counts           |
 | `pnpm proposals`                                      | List pending proposals                                    |

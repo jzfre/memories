@@ -53,8 +53,8 @@ backup/restore documentation for all client surfaces.
   `searchAudit` for CLI/REST audit search
 - **Adapters** — Fastify 5 REST API, MCP stdio server (9 tools), CLI (scan, reembed,
   rebuild, status, proposals, proposals review, audit)
-- **Eval sets** — `evals/retrieval-cases.yaml` (13 cases) and
-  `evals/validation-cases.yaml` (8 cases) run as part of `pnpm test`; include
+- **Eval sets** — `evals/retrieval-cases.yaml` (12 cases) and
+  `evals/validation-cases.yaml` (7 cases) run as part of `pnpm test`; include
   cross-namespace leakage, secret-ref handling, prompt-injection-as-data, and
   validation policy cases
 - **Executor guides** — `docs/executors.md` (Claude Code, VS Code, LM Studio, Hermes,
