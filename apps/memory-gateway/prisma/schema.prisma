@@ -80,3 +80,40 @@ model RetrievalTrace {
 
   @@map("retrieval_traces")
 }
+
+model KnowledgeEvent {
+  id          String   @id
+  eventType   String   @map("event_type")
+  sourceType  String   @map("source_type")
+  namespace   String
+  sensitivity String
+  payload     Json
+  sourceRef   String?  @map("source_ref")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("knowledge_events")
+}
+
+model Proposal {
+  id                String    @id
+  proposalType      String    @map("proposal_type")
+  namespace         String
+  sensitivity       String
+  title             String
+  kind              String    @default("note")
+  proposedContent   String    @map("proposed_content")
+  targetDocumentId  String?   @map("target_document_id")
+  sourceRefs        String[]  @default([]) @map("source_refs")
+  confidence        String    @default("unknown")
+  reviewState       String    @default("pending_review") @map("review_state")
+  reviewerNotes     String?   @map("reviewer_notes")
+  createdBy         String    @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  reviewedBy        String?   @map("reviewed_by")
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz()
+
+  @@index([reviewState], map: "proposals_review_state_idx")
+  @@index([namespace], map: "proposals_namespace_idx")
+  @@map("proposals")
+}
