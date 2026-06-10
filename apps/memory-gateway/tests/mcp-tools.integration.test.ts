@@ -545,6 +545,34 @@ describe("memory_review_proposal (MCP) — approval gate", () => {
     const payload = asJson(res);
     expect(payload.review_state).toBe("needs_more_evidence");
   });
+
+  it("locks MCP approval after 5 wrong codes — even the correct code is then refused; CLI remains the escape hatch", async () => {
+    // Brute-force defense: a model looping guesses cannot eventually hit the code.
+    for (let i = 0; i < 5; i++) {
+      const r = await call("memory_review_proposal", {
+        proposal_id: proposalId,
+        action: "approve",
+        approval_code: "wrongguess", // 10 chars, real (length-matching) guess
+      });
+      expect(r.isError).toBe(true);
+    }
+    // Now the CORRECT code is refused over MCP — the gate is locked.
+    const dbRow = await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } });
+    const locked = await call("memory_review_proposal", {
+      proposal_id: proposalId,
+      action: "approve",
+      approval_code: dbRow.approvalCode!,
+    });
+    expect(locked.isError).toBe(true);
+    expect(locked.content[0].text.toLowerCase()).toContain("too many");
+    const stillPending = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    expect(stillPending?.reviewState).toBe("pending_review");
+
+    // Escape hatch: the human approves via the authenticated core path (CLI/REST), no code.
+    const { reviewProposal } = await import("../src/proposals/index");
+    const result = await reviewProposal(proposalId, { action: "approve", reviewedBy: "human" }, { client: "cli" });
+    expect(result?.review_state).toBe("merged");
+  });
 });
 
 // ---------------------------------------------------------------------------

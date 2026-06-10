@@ -208,7 +208,7 @@ describe("REST API — proposals endpoints", () => {
     // REST (localhost human surface) MUST expose the approvalCode
     expect(row.approvalCode).toBeTruthy();
     expect(typeof row.approvalCode).toBe("string");
-    expect(row.approvalCode.length).toBe(5);
+    expect(row.approvalCode.length).toBe(10);
 
     await app.close();
   });

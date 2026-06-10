@@ -117,6 +117,7 @@ model Proposal {
   score             Int?
   autoPolicy        String?   @map("auto_policy")
   approvalCode      String?   @map("approval_code")
+  approvalAttempts  Int       @default(0) @map("approval_attempts")
 
   @@index([reviewState], map: "proposals_review_state_idx")
   @@index([namespace], map: "proposals_namespace_idx")

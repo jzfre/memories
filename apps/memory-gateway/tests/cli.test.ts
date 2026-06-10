@@ -97,7 +97,7 @@ describe("cli proposals commands", () => {
     // CLI (human surface) MUST expose the approvalCode
     expect(found!.approvalCode).toBeTruthy();
     expect(typeof found!.approvalCode).toBe("string");
-    expect(found!.approvalCode!.length).toBe(5);
+    expect(found!.approvalCode!.length).toBe(10);
   });
 
   it("runReviewProposal approve → state merged, file written to temp vault", async () => {

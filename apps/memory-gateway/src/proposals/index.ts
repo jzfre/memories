@@ -17,25 +17,43 @@ export type { Proposal };
 
 /** Unambiguous characters: lowercase a-z (no o, l) + digits 2-9 (no 0, 1). */
 const CODE_CHARS = "abcdefghijkmnpqrstuvwxyz23456789";
+/** 10 chars over a 32-symbol alphabet ≈ 50 bits. */
+const CODE_LENGTH = 10;
+/** After this many wrong MCP approval attempts, the gate locks (CLI-only thereafter). */
+export const MAX_APPROVAL_ATTEMPTS = 5;
 
 function generateApprovalCode(): string {
-  const bytes = randomBytes(5);
+  const bytes = randomBytes(CODE_LENGTH);
   return Array.from(bytes)
     .map((b) => CODE_CHARS[b % CODE_CHARS.length]!)
     .join("");
 }
 
 /**
- * Constant-time comparison of the provided code against the stored approvalCode.
- * Returns false if the proposal is not found, already reviewed, or has no code.
+ * Gate one MCP approval attempt against the stored approval code, with brute-force
+ * protection. Returns `{ ok, locked }`:
+ *  - `locked` once the proposal has reached MAX_APPROVAL_ATTEMPTS failures — further
+ *    MCP approval is refused even with the correct code; the owner must use the
+ *    authenticated CLI/REST path (which never touches this gate).
+ *  - each wrong guess increments the counter. A correct guess does not.
+ * Constant-time compare; false for a missing proposal or missing code.
  */
-export async function verifyApprovalCode(id: string, code: string): Promise<boolean> {
+export async function gateApproval(id: string, code: string): Promise<{ ok: boolean; locked: boolean }> {
   const proposal = await prisma.proposal.findUnique({ where: { id } });
-  if (!proposal || !proposal.approvalCode) return false;
+  if (!proposal || !proposal.approvalCode) return { ok: false, locked: false };
+  if (proposal.approvalAttempts >= MAX_APPROVAL_ATTEMPTS) return { ok: false, locked: true };
+
   const stored = Buffer.from(proposal.approvalCode, "utf8");
   const provided = Buffer.from(code, "utf8");
-  if (stored.length !== provided.length) return false;
-  return timingSafeEqual(stored, provided);
+  const ok = stored.length === provided.length && timingSafeEqual(stored, provided);
+  if (ok) return { ok: true, locked: false };
+
+  const updated = await prisma.proposal.update({
+    where: { id },
+    data: { approvalAttempts: { increment: 1 } },
+    select: { approvalAttempts: true },
+  });
+  return { ok: false, locked: updated.approvalAttempts >= MAX_APPROVAL_ATTEMPTS };
 }
 
 export interface ProposeNoteInput {
