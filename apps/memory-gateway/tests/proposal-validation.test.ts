@@ -171,6 +171,45 @@ describe("validateProposal (pure)", async () => {
     expect(result.autoPolicy).toBe("human_review_required");
     expect(result.blocked).toBe(false);
   });
+
+  // FINDING 1: secret_ref: with a non-op:// value (real credential) must still be detected
+  it("secret_ref: prefix with non-op:// value IS flagged as secret (bypass fix)", () => {
+    const result = validateProposal(
+      {
+        namespace: "personal",
+        sensitivity: "public",
+        title: "Bypass Attempt",
+        content: "secret_ref: password=hunter2",
+        source_refs: ["ref-1"],
+        kind: "note",
+      },
+      env,
+    );
+    expect(result.flags.some((f) => f.code === "secret_detected")).toBe(true);
+    expect(result.blocked).toBe(true);
+  });
+
+  // FINDING 3: secret-adjacent in allowlist → human_review_required, not blocked
+  it("secret-adjacent sensitivity in allowedSensitivities → human_review_required and not blocked", () => {
+    const envWithSecretAdjacent = {
+      ...env,
+      allowedSensitivities: [...env.allowedSensitivities, "secret-adjacent"],
+    };
+    const result = validateProposal(
+      {
+        namespace: "personal",
+        sensitivity: "secret-adjacent",
+        title: "Secret Adjacent Note",
+        content:
+          "This is a well-written note body with more than 80 characters and specific claims here.",
+        source_refs: ["ref-1"],
+        kind: "note",
+      },
+      envWithSecretAdjacent,
+    );
+    expect(result.autoPolicy).toBe("human_review_required");
+    expect(result.blocked).toBe(false);
+  });
 });
 
 describe("validateProposal wired into createProposal", () => {
@@ -328,6 +367,39 @@ describe("validateProposal wired into createProposal", () => {
 
     const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });
     expect(proposal!.autoPolicy).toBe("human_review_required");
+  });
+
+  // FINDING 2: duplicate detection must also cover needs_more_evidence proposals
+  it("duplicate title against a needs_more_evidence proposal → duplicate_candidate flag", async () => {
+    const { createProposal } = await getModules(dir);
+
+    // First proposal: no source_refs → lands in needs_more_evidence
+    await createProposal(
+      {
+        namespace: "personal",
+        sensitivity: "public",
+        title: "Sourceless Unique Title",
+        content: "First body content that is long and descriptive with enough characters here.",
+        source_refs: [],
+      },
+      { client: "test" },
+    );
+
+    // Second proposal with the same title
+    const result = await createProposal(
+      {
+        namespace: "personal",
+        sensitivity: "public",
+        title: "Sourceless Unique Title",
+        content: "Second body content that is long and descriptive with enough characters too.",
+        source_refs: ["ref-1"],
+      },
+      { client: "test" },
+    );
+
+    const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });
+    const flags = proposal!.validationFlags as Array<{ code: string }>;
+    expect(flags.some((f) => f.code === "duplicate_candidate")).toBe(true);
   });
 
   it("approve on a blocked (secret_detected) proposal refuses with an error", async () => {

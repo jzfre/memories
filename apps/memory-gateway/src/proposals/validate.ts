@@ -30,8 +30,8 @@ const SECRET_PATTERNS: RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /AKIA[0-9A-Z]{16}/,
   /gh[pousr]_[A-Za-z0-9]{20,}/,
-  // password[:=] <value> — but NOT inside a secret_ref: op:// reference
-  /(?<!secret_ref:\s*)password\s*[:=]\s*\S+/i,
+  // password[:=] <value>; valid op:// references are stripped before scanning
+  /password\s*[:=]\s*\S+/i,
   /Bearer [A-Za-z0-9._-]{20,}/,
   /(secret|token|key)\s*[:=]\s*[A-Fa-f0-9]{40,}/i,
   /(secret|token|key)\s*[:=]\s*[A-Za-z0-9+/=]{40,}/i,

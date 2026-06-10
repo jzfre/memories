@@ -140,7 +140,7 @@ export async function createProposal(
       select: { title: true },
     }),
     prisma.proposal.findMany({
-      where: { reviewState: "pending_review" },
+      where: { reviewState: { in: ["pending_review", "needs_more_evidence"] } },
       select: { title: true },
     }),
   ]);
