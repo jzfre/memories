@@ -158,13 +158,14 @@ Original body with oldbodymarker555.
     const doc = await prisma.document.findFirst({ where: { path: "personal/existing-doc.md" } });
     expect(doc).not.toBeNull();
 
-    // Create a patch proposal for this doc
+    // Create a patch proposal for this doc (source_refs required for pending_review state)
     const patchCreated = await createProposal(
       {
         proposal_type: "patch" as const,
         target_document_id: doc!.id,
         title: "Patch existing doc",
         content: "Replaced body with newbodymarker777.",
+        source_refs: ["ref-1"],
       },
       { client: "test" },
     );

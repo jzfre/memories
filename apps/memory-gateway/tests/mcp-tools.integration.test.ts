@@ -365,7 +365,8 @@ describe("memory_propose_note (MCP)", () => {
       namespace: "personal",
       sensitivity: "private",
       title: "MCP Test Proposal",
-      content: "Some test content from the MCP client.",
+      content: "Some test content from the MCP client that is well detailed and specific.",
+      source_refs: ["ref-mcp-1"],
     });
     expect(res.isError).toBeFalsy();
     const payload = asJson(res);
@@ -424,7 +425,8 @@ describe("memory_list_proposals (MCP)", () => {
         namespace: "personal",
         sensitivity: "private",
         title: "List Test A",
-        content: "Content A",
+        content: "Content A with enough detail and source reference to reach pending_review state.",
+        source_refs: ["ref-list-1"],
       }),
     );
     const r2 = asJson(

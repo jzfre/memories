@@ -119,11 +119,23 @@ describe("cli proposals commands", () => {
     const { runListProposals } = await import("../src/cli/index");
 
     await createProposal(
-      { namespace: "personal", sensitivity: "private", title: "Filter Test A", content: "Body A." },
+      {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "Filter Test A",
+        content: "Body A with enough detail to be well-sourced and specific.",
+        source_refs: ["ref-1"],
+      },
       { client: "test" },
     );
     await createProposal(
-      { namespace: "personal", sensitivity: "private", title: "Filter Test B", content: "Body B." },
+      {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "Filter Test B",
+        content: "Body B with enough detail to be well-sourced and specific.",
+        source_refs: ["ref-2"],
+      },
       { client: "test" },
     );
 

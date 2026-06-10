@@ -146,8 +146,15 @@ describe("proposals core", () => {
     const { createProposal, listProposals } = await getProposalFns(dir);
 
     // Create two proposals: one valid (pending_review) and one invalid (rejected namespace)
+    // Note A has source_refs so it passes validation and goes to pending_review
     await createProposal(
-      { namespace: "personal", sensitivity: "private", title: "Note A", content: "Content A" },
+      {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "Note A",
+        content: "Content A with enough detail to be clear about the claim being made here.",
+        source_refs: ["ref-1"],
+      },
       { client: "test" },
     );
     await createProposal(

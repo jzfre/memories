@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { prisma } from "../db/client";
 import { loadConfig } from "../config/index";
 import { writeAudit } from "../audit/index";
 import { scanVault } from "../ingest/indexer";
 import { documentIdFromPath } from "@memories/shared";
 import type { Proposal } from "@prisma/client";
+import { validateProposal } from "./validate";
 
 export type { Proposal };
 
@@ -130,17 +131,51 @@ export async function createProposal(
     confidence = input.confidence ?? "unknown";
   }
 
-  // Validate namespace and sensitivity against allowlists
-  const namespaceAllowed = policy.allowed_namespaces.includes(namespace);
-  const sensitivityAllowed = policy.allowed_sensitivity.includes(sensitivity);
+  // Gather existing titles for duplicate detection:
+  //   - non-archived documents
+  //   - pending proposals (other than the current one)
+  const [existingDocs, pendingProposals] = await Promise.all([
+    prisma.document.findMany({
+      where: { status: { not: "archived" } },
+      select: { title: true },
+    }),
+    prisma.proposal.findMany({
+      where: { reviewState: "pending_review" },
+      select: { title: true },
+    }),
+  ]);
+  const existingTitles = [
+    ...existingDocs.map((d) => d.title),
+    ...pendingProposals.map((p) => p.title),
+  ];
 
-  const rejectionReasons: string[] = [];
-  if (!namespaceAllowed) rejectionReasons.push(`Namespace "${namespace}" is not in the allowed list`);
-  if (!sensitivityAllowed) rejectionReasons.push(`Sensitivity "${sensitivity}" is not in the allowed list`);
+  // Run pure validation
+  const validation = validateProposal(
+    { namespace, sensitivity, title, content: proposedContent, source_refs: sourceRefs, kind },
+    {
+      allowedNamespaces: policy.allowed_namespaces,
+      allowedSensitivities: policy.allowed_sensitivity,
+      existingTitles,
+    },
+  );
 
-  const isRejected = rejectionReasons.length > 0;
-  const reviewState = isRejected ? "rejected" : "pending_review";
-  const reviewerNotes = isRejected ? rejectionReasons.join("; ") : undefined;
+  // Determine review state from validation result
+  let reviewState: string;
+  let reviewerNotes: string | undefined;
+
+  if (validation.blocked) {
+    reviewState = "rejected";
+    reviewerNotes = validation.flags.map((f) => f.message).join("; ");
+  } else if (
+    validation.flags.some((f) => f.code === "missing_source") ||
+    validation.autoPolicy === "needs_more_evidence"
+  ) {
+    reviewState = "needs_more_evidence";
+  } else {
+    reviewState = "pending_review";
+  }
+
+  const isRejected = reviewState === "rejected";
 
   const id = randomUUID();
 
@@ -172,6 +207,9 @@ export async function createProposal(
       reviewState,
       reviewerNotes: reviewerNotes ?? null,
       createdBy: actor,
+      validationFlags: validation.flags as object[],
+      score: validation.score,
+      autoPolicy: validation.autoPolicy,
     },
   });
 
@@ -187,7 +225,7 @@ export async function createProposal(
   });
 
   const message = isRejected
-    ? rejectionReasons.join("; ")
+    ? (reviewerNotes ?? "Proposal blocked by validation.")
     : "Proposal created. Not written to canonical vault yet.";
 
   return { proposal_id: id, review_state: reviewState, message };
@@ -241,14 +279,19 @@ function frontmatterDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Strip characters that could inject new YAML lines from enum-ish values. */
+function sanitizeYamlValue(value: string): string {
+  return value.replace(/[^a-z0-9\-_]/g, "");
+}
+
 function buildNoteFrontmatter(p: Proposal): string {
   const lines = [
     "---",
-    `kind: ${p.kind}`,
+    `kind: ${sanitizeYamlValue(p.kind)}`,
     `namespace: ${p.namespace}`,
     `sensitivity: ${p.sensitivity}`,
     `status: active`,
-    `confidence: ${p.confidence}`,
+    `confidence: ${sanitizeYamlValue(p.confidence)}`,
     `source_type: proposal`,
     `tags: []`,
     "---",
@@ -341,6 +384,17 @@ export async function reviewProposal(
     return { proposal_id: id, review_state: newState };
   }
 
+  // --- approve: defense-in-depth — refuse if proposal has any blocking flag ---
+  const storedFlags = (proposal.validationFlags ?? []) as Array<{ code: string }>;
+  const blockingCodes = ["secret_detected", "namespace_invalid", "sensitivity_invalid"];
+  const blockingFlag = storedFlags.find((f) => blockingCodes.includes(f.code));
+  if (blockingFlag) {
+    throw new Error(
+      `Cannot approve proposal ${id}: it has a blocking validation flag "${blockingFlag.code}". ` +
+        `Resolve the issue and re-submit.`,
+    );
+  }
+
   // --- approve ---
   if (proposal.proposalType === "patch") {
     return approvePatched(proposal, { actor, reviewedBy, reviewerNotes, reviewedAt, ctx });
@@ -426,6 +480,16 @@ async function approvePatched(
   }
 
   const filePath = join(vaultRoot, doc.path);
+
+  // Path traversal defense: assert the resolved path is inside the vault root
+  const resolvedFilePath = resolve(filePath);
+  const resolvedVaultRoot = resolve(vaultRoot);
+  if (!resolvedFilePath.startsWith(resolvedVaultRoot + sep)) {
+    throw new Error(
+      `Path traversal detected: resolved path "${resolvedFilePath}" is outside vault root "${resolvedVaultRoot}".`,
+    );
+  }
+
   const originalContent = readFileSync(filePath, "utf8");
 
   // Replace body after frontmatter, or whole content if no frontmatter
