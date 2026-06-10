@@ -8,6 +8,7 @@
     "reembed": "tsx src/cli/index.ts reembed",
     "rebuild": "tsx src/cli/index.ts rebuild",
     "status": "tsx src/cli/index.ts status",
+    "proposals": "tsx src/cli/index.ts proposals",
     "api": "tsx watch src/api/server.ts",
     "mcp": "tsx src/mcp/index.ts",
     "typecheck": "tsc --noEmit",

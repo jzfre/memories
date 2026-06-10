@@ -13,6 +13,7 @@
     "reembed": "pnpm --filter @memories/memory-gateway reembed",
     "rebuild": "pnpm --filter @memories/memory-gateway rebuild",
     "status": "pnpm --filter @memories/memory-gateway status",
+    "proposals": "pnpm --filter @memories/memory-gateway proposals",
     "api": "pnpm --filter @memories/memory-gateway api",
     "mcp": "pnpm --filter @memories/memory-gateway mcp",
     "test": "pnpm -r test",
