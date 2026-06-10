@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { search } from "../retrieval/search";
 import { fetchDocument } from "../retrieval/fetch";
+import { recentDocuments, explainSources } from "../retrieval/recent";
 import { healthStatus } from "../health/index";
 import { createProposal, listProposals } from "../proposals/index";
 import { buildContextPack } from "../retrieval/context-pack";
@@ -131,6 +132,39 @@ export function buildMcpServer(): McpServer {
     async (args) => {
       const res = await buildContextPack(args, { client: "mcp" });
       return { content: [{ type: "text", text: JSON.stringify(res, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    "memory_recent",
+    {
+      title: "memory.recent",
+      description: `List the most recently indexed documents within the configured scope (namespace + sensitivity allowlists). ${DATA_NOT_INSTRUCTIONS}`,
+      inputSchema: {
+        limit: z.number().int().positive().max(50).optional(),
+      },
+    },
+    async (args) => {
+      const res = await recentDocuments(args, { client: "mcp" });
+      return { content: [{ type: "text", text: JSON.stringify(res, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    "memory_explain_sources",
+    {
+      title: "memory.explain_sources",
+      description: `Explain the retrieval trace for a prior search: shows the query, namespace filter, selected document/chunk ids, and ranking debug info.`,
+      inputSchema: {
+        trace_id: z.string(),
+      },
+    },
+    async ({ trace_id }) => {
+      const res = await explainSources(trace_id, { client: "mcp" });
+      return {
+        content: [{ type: "text", text: res ? JSON.stringify(res, null, 2) : "not found" }],
+        isError: !res,
+      };
     },
   );
 

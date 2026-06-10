@@ -57,15 +57,17 @@ afterAll(async () => {
 });
 
 describe("MCP over real stdio transport", () => {
-  it("lists the seven tools across a real process boundary", async () => {
+  it("lists the nine tools across a real process boundary", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "health_status",
       "memory_context_pack",
+      "memory_explain_sources",
       "memory_fetch",
       "memory_list_proposals",
       "memory_propose_note",
       "memory_propose_patch",
+      "memory_recent",
       "memory_search",
     ]);
   });
