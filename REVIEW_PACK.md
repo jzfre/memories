@@ -51,7 +51,7 @@ backup/restore documentation for all client surfaces.
   per kind (staleness intervals: `runbook: 90d`, `finding: 60d`, `decision: 120d`, etc.)
 - **Audit log** — every call writes an `audit_log` row; retrieval traces recorded;
   `searchAudit` for CLI/REST audit search
-- **Adapters** — Fastify 5 REST API, MCP stdio server (9 tools), CLI (scan, reembed,
+- **Adapters** — Fastify 5 REST API, MCP stdio server (10 tools, incl. code-gated review), CLI (scan, reembed,
   rebuild, status, proposals, proposals review, audit)
 - **Eval sets** — `evals/retrieval-cases.yaml` (12 cases) and
   `evals/validation-cases.yaml` (7 cases) run as part of `pnpm test`; include

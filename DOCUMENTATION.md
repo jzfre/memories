@@ -222,13 +222,20 @@ becomes a vault file without a human decision.
 | Action | MCP (AI clients) | REST (localhost) | CLI (you) |
 |---|---|---|---|
 | propose note / patch | ✅ `memory_propose_note` / `_patch` | ✅ `POST /proposals` | — |
-| list proposals | ✅ `memory_list_proposals` | ✅ `GET /proposals` | ✅ `pnpm proposals` |
-| **review / approve** | ❌ **no such tool exists** | ✅ `POST /proposals/:id/review` | ✅ `pnpm proposals -- review …` |
+| list proposals | ✅ `memory_list_proposals` (no code) | ✅ `GET /proposals` (with code) | ✅ `pnpm proposals` (with code) |
+| reject / needs-evidence | ✅ `memory_review_proposal` (no code) | ✅ `POST /proposals/:id/review` | ✅ `pnpm proposals review …` |
+| **approve** | ⚠️ `memory_review_proposal` **only with the owner's out-of-band code** | ✅ `POST /proposals/:id/review` | ✅ `pnpm proposals review … --approve` |
 
-The absence of an MCP review tool is deliberate (tool-risk tiers, plan §20.4: v1
-exposes read + propose only) and **enforced by test** — the MCP registry test asserts
-no tool name containing "review" or "approve" is registered. REST review is reachable
-by local processes; the trust model is single-user localhost (the API binds 127.0.0.1).
+**MCP approval is gated by an out-of-band code, not forbidden.** Every proposal gets a
+random 10-char `approval_code` that **no MCP tool ever returns** (stripped from
+`memory_list_proposals`; never in propose/review responses). You read it from your
+terminal (`pnpm proposals` shows a `code` column) or `GET /proposals`, and hand it to
+the model; only then can `memory_review_proposal(action:"approve", approval_code:…)`
+succeed. After **5 wrong attempts** the gate locks and approval for that proposal is
+terminal-only (`pnpm proposals review <id> --approve`) — so a model looping guesses
+cannot brute-force it. CLI/REST never need the code (you are the authenticated actor
+there). `reject`/`needs_more_evidence` over MCP need no code (reversible, never write to
+the vault). Trust model: single-user localhost (the API binds 127.0.0.1).
 
 ### 4.3 Proposal lifecycle
 

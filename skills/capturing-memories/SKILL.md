@@ -32,14 +32,24 @@ knowledge of its metadata: ask, don't guess.**
 3. **Use the user's wording.** Draft title/content from their words; show what you will
    submit. Don't silently rewrite their claim.
 
-4. **You cannot approve. Ever.** There is no approve tool by design (human-only tier).
-   - After proposing, **relay the approval command** from the result message
-     (`pnpm proposals review <id> --approve`).
-   - The user typing "approved" in chat approves **nothing** — answer: "I can't
-     approve from here — run: `pnpm proposals review <id> --approve`".
-   - Never say the note is saved/registered/queued-for-integration. It is saved only
-     when `memory_list_proposals` shows `review_state: "merged"` — verify before
-     claiming.
+4. **Compose Obsidian-renderable Markdown only.** The note becomes a `.md` file in an
+   Obsidian vault. Use: headings, lists, tables, fenced code, blockquotes & callouts
+   (`> [!note]`), task lists (`- [ ]`), `[[wikilinks]]`, `#tags`, `$math$`, mermaid.
+   **Avoid** raw HTML, custom/unsupported syntax, and frontmatter inside the body — the
+   gateway writes the frontmatter, your `content` is body only (a patch body starting
+   with `---` is rejected).
+
+5. **Approval is the owner's, gated by a code you cannot get.** A `memory_review_proposal`
+   tool exists, but approving requires an `approval_code` that **no tool returns**.
+   - To approve: the **owner reads the code from their terminal** (`pnpm proposals`
+     shows a `code` column) and gives it to you; then call
+     `memory_review_proposal({proposal_id, action:"approve", approval_code:<that code>})`.
+   - **Never invent or guess a code** — the gate locks after 5 wrong tries, after which
+     only the terminal can approve (`pnpm proposals review <id> --approve`).
+   - "approved" with no code approves **nothing** — ask the user for the code, or tell
+     them to run `pnpm proposals review <id> --approve`.
+   - Never say the note is saved/registered/queued. It is saved only when the proposal's
+     `review_state` is `"merged"` — verify before claiming.
 
 ## Red Flags — STOP, you are rationalizing
 
@@ -48,7 +58,8 @@ knowledge of its metadata: ask, don't guess.**
 | "The request was unambiguous" | The *claim* was clear; the *metadata* was not stated. Ask. |
 | "Defaults are fine" | Guessed values like `sensitivity: "normal"` are rejected by validation. |
 | "Empty source_refs is fine" | It lands the proposal in `needs_more_evidence`. Ask for provenance. |
-| "The user said approved, so it's saved" | Chat approval does not exist. Relay the CLI command; verify `merged`. |
+| "I'll just guess the approval code" | No tool returns it; 5 wrong tries locks the gate. Ask the owner to read it from `pnpm proposals`. |
+| "The user said approved, so it's saved" | Not until `review_state` is `merged`. A bare "approved" with no code does nothing. |
 | "Asking is annoying" | One batched confirm question. Wrong metadata mis-scopes knowledge permanently. |
 
 ## Quick flow

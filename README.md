@@ -66,7 +66,7 @@ All commands run from the repo root via pnpm scripts:
 
 ## MCP tools
 
-All 9 tools are exposed on the `memories` MCP server.  Wire names use underscores
+All 10 tools are exposed on the `memories` MCP server.  Wire names use underscores
 (MCP tool names cannot contain dots); titles use dots.
 
 | Wire name                  | Title                      | Description                                                          |
@@ -80,9 +80,12 @@ All 9 tools are exposed on the `memories` MCP server.  Wire names use underscore
 | `memory_context_pack`      | `memory.context_pack`      | Build a token-budgeted context pack for a goal                       |
 | `memory_recent`            | `memory.recent`            | List most recently indexed documents within scope                    |
 | `memory_explain_sources`   | `memory.explain_sources`   | Explain the retrieval trace for a prior search                       |
+| `memory_review_proposal`   | `memory.review_proposal`   | Reject/needs-evidence freely; **approve only with the owner's out-of-band code** |
 
-v1 exposes Tier 0 (read) and Tier 1 (propose) tools only.  Review/approve is
-Tier 2 and is restricted to the human CLI/REST surface (see `docs/implementation-plan.md` §20.4).
+Approving over MCP requires a per-proposal `approval_code` that no tool returns — the
+owner reads it from `pnpm proposals` and hands it to the model; 5 wrong attempts lock
+the gate to terminal-only.  Reject/needs-evidence need no code.  See
+[DOCUMENTATION.md §4](DOCUMENTATION.md) and `docs/implementation-plan.md` §20.4.
 
 ## REST endpoints
 
