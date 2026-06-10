@@ -6,7 +6,12 @@ thin REST API.  Postgres is a rebuildable index; the Obsidian vault + Git is can
 
 ## Architecture
 
-`docs/superpowers/specs/2026-06-07-memories-sprint1-design.md` (design) and
+**Start with [DOCUMENTATION.md](DOCUMENTATION.md)** — how the system actually works:
+the two-repository model (canonical vault vs. this tool), where AI is used (local
+embeddings only; frontier models are clients, never writers), full data flows, and the
+approval workflow in depth.
+
+Also: `docs/superpowers/specs/2026-06-07-memories-sprint1-design.md` (design) and
 `docs/implementation-plan.md` (full roadmap).
 
 ## Prerequisites
