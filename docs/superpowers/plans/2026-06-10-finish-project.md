@@ -203,6 +203,8 @@ Per §19.6 add exported `REVIEW_INTERVALS_DAYS: Record<string, number>` (`runboo
 
 ## SPRINT C — Graphify adapter (Phase 6)
 
+> **DEFERRED by owner decision (2026-06-10):** Sprints C and D are out of scope for this stage. Phases 6 and 8 remain on the roadmap (see TODO.md / REVIEW_PACK known limitations). Do not implement.
+
 ### Task C1: Migration — graphify tables (§13.3 verbatim, adapted)
 
 `20260610020000_graphify/migration.sql`: `graphify_runs` (id pk, corpus_id, namespace, input_path, output_path, backend, graph_json_checksum?, report_checksum?, status, started_at timestamptz, finished_at?, metadata jsonb default '{}') and `graphify_insights` (id pk, run_id fk→graphify_runs cascade, namespace, insight_type, title, content, confidence default 'unknown', review_state default 'candidate', source_node_ids text[] default '{}', created_at). Prisma models `GraphifyRun`/`GraphifyInsight`. Verify + commit.
