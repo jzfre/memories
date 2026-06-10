@@ -63,13 +63,14 @@ describe("recentDocuments", () => {
     expect(ids.some((id) => id.includes("client-b"))).toBe(false);
     expect(namespaces.some((ns) => ns.includes("client-b"))).toBe(false);
 
-    // secret-adjacent sensitivity is not in the allowlist
-    // The secret-note doc id contains "secret" — it must not appear
-    expect(ids.some((id) => id.includes("secret"))).toBe(false);
-    // Double-check by querying DB for the secret doc to verify it exists but was filtered
-    const secretDoc = await prisma.document.findFirst({ where: { sensitivity: "secret-adjacent" } });
-    expect(secretDoc).not.toBeNull(); // Fixture IS seeded
-    expect(ids).not.toContain(secretDoc!.id);
+    // secret-adjacent sensitivity is not in the allowlist — filter by sensitivity, not by
+    // id substring (the id check was fragile and would catch unrelated fixture ids that
+    // happen to contain "secret" as part of a legitimate allowed note).
+    const secretDocs = await prisma.document.findMany({ where: { sensitivity: "secret-adjacent" } });
+    expect(secretDocs.length).toBeGreaterThan(0); // Fixture IS seeded
+    for (const secretDoc of secretDocs) {
+      expect(ids, `secret-adjacent doc "${secretDoc.id}" must not appear in recent results`).not.toContain(secretDoc.id);
+    }
   });
 
   it("honours the limit parameter (capped at 50)", async () => {

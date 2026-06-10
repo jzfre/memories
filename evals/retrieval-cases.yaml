@@ -1,0 +1,106 @@
+# Retrieval eval cases for the memory-gateway fixture vault.
+# Each case is run against the full test config allowlist (namespaces: [personal, work/client-a]).
+# expected_documents: ids that MUST appear in results
+# forbidden_documents: ids that MUST NOT appear in results
+
+cases:
+  - id: pgvector-shared-keyword
+    query: "pgvector"
+    expected_documents:
+      - personal.decision-canonical
+      - client-a.finding
+      - personal.injection-note
+    forbidden_documents:
+      - client-b.finding
+      - personal.secret-note
+
+  - id: obsidian-title-only
+    # "obsidian" and "canonical" appear only in the title of decision-canonical, not the body.
+    query: "obsidian canonical"
+    expected_documents:
+      - personal.decision-canonical
+    forbidden_documents:
+      - client-b.finding
+
+  - id: quarterly-objectives
+    query: "quarterly objectives"
+    expected_documents:
+      - personal.tagged
+    forbidden_documents:
+      - client-b.finding
+
+  - id: multi-section-alpha
+    query: "multichunktoken alpha"
+    expected_documents:
+      - personal.multi-section
+    forbidden_documents:
+      - client-b.finding
+
+  - id: client-a-uat
+    query: "UAT finding metric"
+    expected_documents:
+      - client-a.finding
+    forbidden_documents:
+      - client-b.finding
+      - personal.secret-note
+
+  - id: roadmap-tag
+    # "roadmap" lives only in the tags field of personal.tagged — tests metadata indexing.
+    query: "roadmap"
+    expected_documents:
+      - personal.tagged
+    forbidden_documents:
+      - client-b.finding
+
+  - id: welcome-vault
+    query: "welcome vault"
+    expected_documents:
+      - welcome
+    forbidden_documents:
+      - client-b.finding
+
+  # ---- §30.2 Security cases ----
+
+  - id: sec-no-client-b-leak
+    # "never leak" is a phrase unique to client-b/finding — should return nothing because
+    # work/client-b is outside the test config allowlist.
+    query: "never leak client-b"
+    expected_documents: []
+    forbidden_documents:
+      - client-b.finding
+
+  - id: sec-credentialref-allowed
+    # The secret_ref note contains an op:// reference (not a real secret).
+    # The reference note SHOULD be retrievable; the snippet must contain "secret_ref"
+    # but must NOT expose a real password value.
+    query: "credentialref"
+    expected_documents:
+      - personal.secret-ref-note
+    forbidden_documents:
+      - client-b.finding
+      - personal.secret-note
+
+  - id: sec-injection-data-only
+    # Prompt-injection content should be returned as plain data (the gateway never executes it).
+    # The response must carry safety_note.
+    query: "injectiontest"
+    expected_documents:
+      - personal.injection-note
+    forbidden_documents:
+      - client-b.finding
+
+  - id: sec-secret-note-filtered
+    # personal.secret-note has sensitivity=secret-adjacent which is outside the test
+    # config's allowed_sensitivity list — must never surface.
+    query: "filtered sensitivity"
+    expected_documents: []
+    forbidden_documents:
+      - personal.secret-note
+      - client-b.finding
+
+  - id: decision-kind-search
+    query: "decision"
+    expected_documents:
+      - personal.decision-canonical
+    forbidden_documents:
+      - client-b.finding
