@@ -80,7 +80,7 @@ function printProposalsTable(proposals: Proposal[]): void {
     console.log("(no proposals)");
     return;
   }
-  const header = ["id".padEnd(36), "state".padEnd(22), "namespace".padEnd(20), "title"].join("  ");
+  const header = ["id".padEnd(36), "state".padEnd(22), "code".padEnd(7), "namespace".padEnd(20), "title"].join("  ");
   console.log(header);
   console.log("-".repeat(header.length + 6));
   for (const p of proposals) {
@@ -88,6 +88,7 @@ function printProposalsTable(proposals: Proposal[]): void {
       [
         p.id.padEnd(36),
         p.reviewState.padEnd(22),
+        (p.approvalCode ?? "").padEnd(7),
         p.namespace.padEnd(20),
         p.title,
       ].join("  "),

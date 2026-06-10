@@ -58,7 +58,7 @@ afterAll(async () => {
 });
 
 describe("MCP server / tool registry", () => {
-  it("exposes exactly the nine tools, each with a description and input schema, and NO review tool", async () => {
+  it("exposes exactly the ten tools, each with a description and input schema, incl. memory_review_proposal", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
@@ -70,10 +70,11 @@ describe("MCP server / tool registry", () => {
       "memory_propose_note",
       "memory_propose_patch",
       "memory_recent",
+      "memory_review_proposal",
       "memory_search",
     ]);
-    // v1 must not expose any review/approve tool over MCP (Tier 2 restricted to CLI/REST)
-    expect(names.some((n) => n.includes("review") || n.includes("approve"))).toBe(false);
+    // memory_review_proposal IS present (approval is code-gated, not CLI/REST-only)
+    expect(names).toContain("memory_review_proposal");
     for (const t of tools) {
       expect(t.description && t.description.length).toBeGreaterThan(0);
       expect(t.inputSchema).toBeTruthy();
@@ -456,5 +457,159 @@ describe("memory_list_proposals (MCP)", () => {
     // Filter by reviewState=rejected
     const rejected = asJson(await call("memory_list_proposals", { reviewState: "rejected" }));
     expect(rejected.map((p: any) => p.id)).toContain(r2.proposal_id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// memory_review_proposal (MCP) — approval code gate
+// ---------------------------------------------------------------------------
+
+describe("memory_review_proposal (MCP) — approval gate", () => {
+  let proposalId: string;
+
+  beforeEach(async () => {
+    // Create a fresh pending proposal for each test
+    const res = asJson(
+      await call("memory_propose_note", {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "Review Gate Test",
+        content: "Unique content for review gate test with sufficient detail.",
+        source_refs: ["ref-gate-1"],
+      }),
+    );
+    proposalId = res.proposal_id;
+  });
+
+  it("approve WITHOUT approval_code → isError true, proposal still pending_review", async () => {
+    const res = await call("memory_review_proposal", {
+      proposal_id: proposalId,
+      action: "approve",
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("out-of-band approval code");
+    // Proposal must remain pending
+    const row = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    expect(row?.reviewState).toBe("pending_review");
+  });
+
+  it("approve WITH WRONG approval_code → isError true, proposal still pending_review", async () => {
+    const res = await call("memory_review_proposal", {
+      proposal_id: proposalId,
+      action: "approve",
+      approval_code: "zzzzz", // wrong
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("out-of-band approval code");
+    const row = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    expect(row?.reviewState).toBe("pending_review");
+  });
+
+  it("approve WITH CORRECT approval_code → state merged, document written", async () => {
+    // Read the approval code directly from DB (simulating the human reading it from the terminal)
+    const dbRow = await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } });
+    expect(dbRow.approvalCode).toBeTruthy();
+
+    const res = await call("memory_review_proposal", {
+      proposal_id: proposalId,
+      action: "approve",
+      approval_code: dbRow.approvalCode!,
+    });
+    expect(res.isError).toBeFalsy();
+    const payload = asJson(res);
+    expect(payload.review_state).toBe("merged");
+    expect(payload.document_path).toBeTruthy();
+
+    const after = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    expect(after?.reviewState).toBe("merged");
+  });
+
+  it("reject WITHOUT approval_code → state rejected (reversible, no code needed)", async () => {
+    const res = await call("memory_review_proposal", {
+      proposal_id: proposalId,
+      action: "reject",
+    });
+    expect(res.isError).toBeFalsy();
+    const payload = asJson(res);
+    expect(payload.review_state).toBe("rejected");
+    const row = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    expect(row?.reviewState).toBe("rejected");
+  });
+
+  it("needs_more_evidence WITHOUT approval_code → state needs_more_evidence (no code needed)", async () => {
+    const res = await call("memory_review_proposal", {
+      proposal_id: proposalId,
+      action: "needs_more_evidence",
+    });
+    expect(res.isError).toBeFalsy();
+    const payload = asJson(res);
+    expect(payload.review_state).toBe("needs_more_evidence");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Approval-code leak prevention
+// ---------------------------------------------------------------------------
+
+describe("approval_code leak prevention (MCP)", () => {
+  it("memory_list_proposals response JSON does NOT contain the approval_code value", async () => {
+    // Create a proposal so there is at least one row with an approval code
+    const createRes = asJson(
+      await call("memory_propose_note", {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "Leak Test Proposal",
+        content: "Leak test content with enough detail and specificity.",
+        source_refs: ["ref-leak-1"],
+      }),
+    );
+    const proposalId = createRes.proposal_id;
+
+    // Read the actual code from DB
+    const dbRow = await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } });
+    const code = dbRow.approvalCode!;
+    expect(code).toBeTruthy();
+
+    // Call the MCP list tool
+    const listRes = await call("memory_list_proposals", {});
+    const rawJson = listRes.content[0].text;
+
+    // The approval code must NOT appear anywhere in the MCP response
+    expect(rawJson).not.toContain(code);
+    // Also confirm the field name is absent
+    expect(rawJson).not.toContain("approvalCode");
+    expect(rawJson).not.toContain("approval_code");
+  });
+
+  it("memory_propose_note response does NOT contain the approval_code", async () => {
+    const res = await call("memory_propose_note", {
+      namespace: "personal",
+      sensitivity: "private",
+      title: "Leak Test Propose",
+      content: "Another leak test with enough detail to be pending.",
+      source_refs: ["ref-leak-2"],
+    });
+    const rawText = res.content[0].text;
+    expect(rawText).not.toContain("approvalCode");
+    expect(rawText).not.toContain("approval_code");
+
+    // Verify the code IS stored in DB (just not returned)
+    const proposalId = JSON.parse(rawText).proposal_id;
+    const dbRow = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    expect(dbRow?.approvalCode).toBeTruthy();
+  });
+
+  it("memory_propose_patch response does NOT contain the approval_code", async () => {
+    // Need an existing document - use the in-scope fixture
+    const doc = await prisma.document.findFirstOrThrow({ where: { namespace: "personal" } });
+    const res = await call("memory_propose_patch", {
+      target_document_id: doc.id,
+      title: "Patch Leak Test",
+      content: "Patched body content that is unique and specific.",
+      source_refs: ["ref-patch-leak"],
+    });
+    const rawText = res.content[0].text;
+    expect(rawText).not.toContain("approvalCode");
+    expect(rawText).not.toContain("approval_code");
   });
 });

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { prisma } from "../db/client";
@@ -10,6 +10,33 @@ import type { Proposal } from "@prisma/client";
 import { validateProposal } from "./validate";
 
 export type { Proposal };
+
+// ---------------------------------------------------------------------------
+// Approval-code helpers
+// ---------------------------------------------------------------------------
+
+/** Unambiguous characters: lowercase a-z (no o, l) + digits 2-9 (no 0, 1). */
+const CODE_CHARS = "abcdefghijkmnpqrstuvwxyz23456789";
+
+function generateApprovalCode(): string {
+  const bytes = randomBytes(5);
+  return Array.from(bytes)
+    .map((b) => CODE_CHARS[b % CODE_CHARS.length]!)
+    .join("");
+}
+
+/**
+ * Constant-time comparison of the provided code against the stored approvalCode.
+ * Returns false if the proposal is not found, already reviewed, or has no code.
+ */
+export async function verifyApprovalCode(id: string, code: string): Promise<boolean> {
+  const proposal = await prisma.proposal.findUnique({ where: { id } });
+  if (!proposal || !proposal.approvalCode) return false;
+  const stored = Buffer.from(proposal.approvalCode, "utf8");
+  const provided = Buffer.from(code, "utf8");
+  if (stored.length !== provided.length) return false;
+  return timingSafeEqual(stored, provided);
+}
 
 export interface ProposeNoteInput {
   namespace: string;
@@ -233,6 +260,8 @@ export async function createProposal(
   const isRejected = reviewState === "rejected";
 
   const id = randomUUID();
+  // Generate approval code; stored in DB but never returned to the caller (model).
+  const approvalCode = generateApprovalCode();
 
   // Always insert knowledge_event and proposal row (retained even if rejected)
   await prisma.knowledgeEvent.create({
@@ -265,6 +294,7 @@ export async function createProposal(
       validationFlags: validation.flags as object[],
       score: validation.score,
       autoPolicy: validation.autoPolicy,
+      approvalCode,
     },
   });
 

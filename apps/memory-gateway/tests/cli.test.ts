@@ -76,6 +76,30 @@ describe("cli proposals commands", () => {
     expect(found!.title).toBe("CLI List Test Note");
   });
 
+  it("runListProposals rows include approvalCode (human out-of-band channel)", async () => {
+    const { createProposal } = await import("../src/proposals/index");
+    const { runListProposals } = await import("../src/cli/index");
+
+    const created = await createProposal(
+      {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "CLI ApprovalCode Test",
+        content: "Content with source ref for approval code check.",
+        source_refs: ["ref-cli-code"],
+      },
+      { client: "test" },
+    );
+
+    const proposals = await runListProposals({});
+    const found = proposals.find((p) => p.id === created.proposal_id);
+    expect(found).toBeTruthy();
+    // CLI (human surface) MUST expose the approvalCode
+    expect(found!.approvalCode).toBeTruthy();
+    expect(typeof found!.approvalCode).toBe("string");
+    expect(found!.approvalCode!.length).toBe(5);
+  });
+
   it("runReviewProposal approve → state merged, file written to temp vault", async () => {
     const { createProposal } = await import("../src/proposals/index");
     const { runListProposals, runReviewProposal } = await import("../src/cli/index");

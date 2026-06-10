@@ -116,6 +116,7 @@ model Proposal {
   validationFlags   Json      @default("[]") @map("validation_flags")
   score             Int?
   autoPolicy        String?   @map("auto_policy")
+  approvalCode      String?   @map("approval_code")
 
   @@index([reviewState], map: "proposals_review_state_idx")
   @@index([namespace], map: "proposals_namespace_idx")

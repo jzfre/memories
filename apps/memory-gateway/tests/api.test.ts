@@ -182,6 +182,37 @@ describe("REST API — proposals endpoints", () => {
     await app.close();
   });
 
+  it("GET /proposals rows include approvalCode (human out-of-band channel)", async () => {
+    const app = await buildWithTempVault(dir);
+
+    // Create a proposal
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/proposals",
+      payload: {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "ApprovalCode REST Test",
+        content: "Content with enough detail and source ref.",
+        source_refs: ["ref-rest-1"],
+      },
+    });
+    expect(createRes.statusCode).toBe(200);
+    const { proposal_id } = createRes.json();
+
+    const listRes = await app.inject({ method: "GET", url: "/proposals" });
+    expect(listRes.statusCode).toBe(200);
+    const body = listRes.json();
+    const row = body.find((p: any) => p.id === proposal_id);
+    expect(row).toBeTruthy();
+    // REST (localhost human surface) MUST expose the approvalCode
+    expect(row.approvalCode).toBeTruthy();
+    expect(typeof row.approvalCode).toBe("string");
+    expect(row.approvalCode.length).toBe(5);
+
+    await app.close();
+  });
+
   it("POST /proposals/:id/review approve → 200 + state merged + file created under temp vault 00-inbox/reviewed", async () => {
     const app = await buildWithTempVault(dir);
 
