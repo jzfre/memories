@@ -22,6 +22,7 @@ const CONCEPTS: Record<string, number> = {
 
 class ConceptEmbedder implements Embedder {
   readonly dim = 768;
+  readonly model = "test";
   private vec(text: string): number[] {
     const v = new Array(this.dim).fill(0);
     v[this.dim - 1] = 0.01; // baseline so no chunk is a zero vector (cosine-safe)

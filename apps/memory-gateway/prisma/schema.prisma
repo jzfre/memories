@@ -44,9 +44,10 @@ model Chunk {
   meta        String                   @default("")
   content     String
   tokenCount  Int?                     @map("token_count")
-  tsv         Unsupported("tsvector")?
-  embedding   Unsupported("vector(768)")?
-  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz()
+  tsv            Unsupported("tsvector")?
+  embedding      Unsupported("vector(768)")?
+  embeddingModel String?                  @map("embedding_model")
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz()
   document    Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])

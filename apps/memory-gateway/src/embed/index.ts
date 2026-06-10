@@ -11,6 +11,8 @@
 export interface Embedder {
   /** Vector dimensionality, or 0 when disabled. */
   readonly dim: number;
+  /** Model name identifier stored per chunk for provenance. */
+  readonly model: string;
   /** Cheap liveness probe; false means "skip embeddings, use FTS only". */
   available(): Promise<boolean>;
   /** Embed document chunks (provider may apply a document task-prefix). */
@@ -22,6 +24,7 @@ export interface Embedder {
 /** No-op provider: reports unavailable so callers fall back to full-text search. */
 export class DisabledEmbedder implements Embedder {
   readonly dim = 0;
+  readonly model = "disabled";
   async available(): Promise<boolean> {
     return false;
   }
@@ -35,11 +38,14 @@ export class DisabledEmbedder implements Embedder {
 
 /** Talks to an OpenAI-compatible embeddings endpoint (e.g. LM Studio). */
 export class OpenAICompatibleEmbedder implements Embedder {
+  readonly model: string;
   constructor(
     private readonly baseUrl: string,
-    private readonly model: string,
+    model: string,
     readonly dim: number,
-  ) {}
+  ) {
+    this.model = model;
+  }
 
   async available(): Promise<boolean> {
     try {

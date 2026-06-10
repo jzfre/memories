@@ -160,7 +160,7 @@ export async function scanVault(
         );
         await Promise.all(
           chunks.map((c, i) =>
-            prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector WHERE id = ${chunkId(id, c.chunkIndex)}`,
+            prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector, embedding_model = ${embedder.model} WHERE id = ${chunkId(id, c.chunkIndex)}`,
           ),
         );
         await prisma.document.update({ where: { id }, data: { embeddingStatus: "current", embeddedAt: now } });
@@ -245,7 +245,7 @@ export async function embedPending(deps: IngestDeps = {}, batchSize = 32): Promi
     );
     await Promise.all(
       rows.map((r, i) =>
-        prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector WHERE id = ${r.id}`,
+        prisma.$executeRaw`UPDATE chunks SET embedding = ${toVectorLiteral(vectors[i])}::vector, embedding_model = ${embedder.model} WHERE id = ${r.id}`,
       ),
     );
     embedded += rows.length;

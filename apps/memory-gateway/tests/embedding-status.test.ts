@@ -8,6 +8,7 @@ import { DisabledEmbedder, type Embedder } from "../src/embed/index";
 // Trivial deterministic embedder: every text -> a fixed unit vector.
 class FixedEmbedder implements Embedder {
   readonly dim = 768;
+  readonly model = "test";
   private vec() {
     const v = new Array(768).fill(0);
     v[0] = 1;
@@ -21,6 +22,7 @@ class FixedEmbedder implements Embedder {
 // Available, but every embed call fails — exercises the best-effort error path.
 class FailingEmbedder implements Embedder {
   readonly dim = 768;
+  readonly model = "test";
   async available() { return true; }
   async embedDocuments(): Promise<number[][]> { throw new Error("embed boom"); }
   async embedQuery(): Promise<number[]> { throw new Error("embed boom"); }
@@ -80,5 +82,39 @@ describe("embedding status", () => {
     expect(res.embedded).toBeGreaterThan(0);
     const d = await prisma.document.findFirstOrThrow({ where: { path: "personal/a.md" } });
     expect(d.embeddingStatus).toBe("current");
+  });
+
+  it("chunks carry embedding_model after a successful scanVault", async () => {
+    const scan = await scanFor(dir, { embedder: new FixedEmbedder() });
+    await scan();
+    const chunks = await prisma.$queryRawUnsafe<{ embedding_model: string | null }[]>(
+      `SELECT embedding_model FROM chunks WHERE embedding IS NOT NULL`
+    );
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const c of chunks) {
+      expect(c.embedding_model).toBe("test");
+    }
+  });
+
+  it("chunks carry embedding_model after embedPending", async () => {
+    // Index without embedder → no embeddings, no model.
+    const scanDisabled = await scanFor(dir, { embedder: new DisabledEmbedder() });
+    await scanDisabled();
+    // Confirm embedding_model is null before backfill.
+    const before = await prisma.$queryRawUnsafe<{ embedding_model: string | null }[]>(
+      `SELECT embedding_model FROM chunks`
+    );
+    expect(before.every((c) => c.embedding_model === null)).toBe(true);
+    // Backfill.
+    await prisma.document.updateMany({ data: { embeddingStatus: "pending" } });
+    const { embedPending } = await import("../src/ingest/indexer");
+    await embedPending({ embedder: new FixedEmbedder() });
+    const after = await prisma.$queryRawUnsafe<{ embedding_model: string | null }[]>(
+      `SELECT embedding_model FROM chunks WHERE embedding IS NOT NULL`
+    );
+    expect(after.length).toBeGreaterThan(0);
+    for (const c of after) {
+      expect(c.embedding_model).toBe("test");
+    }
   });
 });

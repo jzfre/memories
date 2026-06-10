@@ -5,13 +5,24 @@ import { join } from "node:path";
 import { resetDb } from "./helpers/db";
 import { deriveEmbeddingFreshness, isDocStale, REVIEW_INTERVALS_DAYS, DEFAULT_REVIEW_INTERVAL_DAYS } from "../src/status/index";
 import { prisma } from "../src/db/client";
+import type { Embedder } from "../src/embed/index";
 
-async function scanFor(vaultRoot: string) {
+// Trivial fixed embedder for status tests.
+class FixedEmbedder implements Embedder {
+  readonly dim = 768;
+  readonly model = "test";
+  private vec() { const v = new Array(768).fill(0); v[0] = 1; return v; }
+  async available() { return true; }
+  async embedDocuments(texts: string[]) { return texts.map(() => this.vec()); }
+  async embedQuery() { return this.vec(); }
+}
+
+async function scanFor(vaultRoot: string, deps: { embedder?: Embedder } = {}) {
   process.env.VAULT_ROOT = vaultRoot;
   const { __resetConfigCache } = await import("../src/config/index");
   __resetConfigCache();
   const { scanVault } = await import("../src/ingest/indexer");
-  return scanVault;
+  return (opts: Parameters<typeof scanVault>[0] = {}) => scanVault(opts, deps);
 }
 
 describe("deriveEmbeddingFreshness", () => {
@@ -132,5 +143,24 @@ describe("computeIndexStatus", () => {
     // Freshly scanned docs have updatedAt = now → well within any interval
     expect(s.stale_documents).toHaveLength(0);
     expect(s.totals.stale_documents).toBe(0);
+  });
+
+  it("totals.embedding_model is null when no embeddings have been stored", async () => {
+    // Default scanFor has no embedder → embeddings disabled.
+    const scanVault = await scanFor(dir);
+    await scanVault();
+    const { computeIndexStatus } = await import("../src/status/index");
+    const s = await computeIndexStatus();
+    expect(s.totals.embedding_model).toBeNull();
+    expect(s.totals.embedding_dimensions).toBeNull();
+  });
+
+  it("totals.embedding_model reports the model name after embedding, with dimensions 768", async () => {
+    const scanVault = await scanFor(dir, { embedder: new FixedEmbedder() });
+    await scanVault();
+    const { computeIndexStatus } = await import("../src/status/index");
+    const s = await computeIndexStatus();
+    expect(s.totals.embedding_model).toBe("test");
+    expect(s.totals.embedding_dimensions).toBe(768);
   });
 });
