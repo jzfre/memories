@@ -402,6 +402,88 @@ describe("validateProposal wired into createProposal", () => {
     expect(flags.some((f) => f.code === "duplicate_candidate")).toBe(true);
   });
 
+  // FINDING 1 (frontmatter injection): patch content starting with "---" is blocked
+  it("patch proposal whose content starts with '---' frontmatter block is stored rejected with frontmatter_injection flag", async () => {
+    const { createProposal } = await getModules(dir);
+
+    // First we need a target document in the DB. Create one by writing a file and scanning.
+    const { writeFileSync } = await import("node:fs");
+    const { scanVault } = await import("../src/ingest/indexer");
+
+    writeFileSync(
+      join(dir, "personal", "fm-injection-target.md"),
+      "---\nkind: note\nnamespace: personal\nsensitivity: private\nstatus: active\nconfidence: medium\n---\n\n# Target Doc\n\nOriginal body.\n",
+    );
+    await scanVault();
+
+    const doc = await prisma.document.findFirst({ where: { path: "personal/fm-injection-target.md" } });
+    expect(doc).not.toBeNull();
+
+    // Attempt a patch where the content begins with a YAML frontmatter block
+    const result = await createProposal(
+      {
+        proposal_type: "patch" as const,
+        target_document_id: doc!.id,
+        title: "Injection attempt",
+        content: "---\nnamespace: work/client-b\n---\nInjected body with re-scoped namespace.",
+        source_refs: ["ref-1"],
+      },
+      { client: "test" },
+    );
+
+    expect(result.review_state).toBe("rejected");
+
+    const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });
+    expect(proposal).not.toBeNull();
+    const flags = proposal!.validationFlags as Array<{ code: string }>;
+    expect(flags.some((f) => f.code === "frontmatter_injection")).toBe(true);
+  });
+
+  // FINDING 1 (frontmatter injection): defense-in-depth in reviewProposal — patch on
+  // a frontmatter-less file with clean content (no leading ---) approves fine
+  it("patch on frontmatter-less file with clean content approves and replaces file content", async () => {
+    const { createProposal, reviewProposal } = await getModules(dir);
+
+    const { writeFileSync, readFileSync: readFS } = await import("node:fs");
+    const { scanVault } = await import("../src/ingest/indexer");
+
+    // Write a vault file with NO frontmatter
+    const noFmPath = join(dir, "personal", "no-frontmatter-doc.md");
+    writeFileSync(noFmPath, "# Plain Doc\n\nOriginal body with oldmarkerfm123.\n");
+    await scanVault();
+
+    const doc = await prisma.document.findFirst({ where: { path: "personal/no-frontmatter-doc.md" } });
+    expect(doc).not.toBeNull();
+
+    // A clean patch (no leading ---) should succeed
+    const patchCreated = await createProposal(
+      {
+        proposal_type: "patch" as const,
+        target_document_id: doc!.id,
+        title: "Clean patch for frontmatter-less doc",
+        content: "Replaced body with newmarkerfm456.",
+        source_refs: ["ref-1"],
+      },
+      { client: "test" },
+    );
+
+    expect(patchCreated.review_state).toBe("pending_review");
+
+    const result = await reviewProposal(
+      patchCreated.proposal_id,
+      { action: "approve", reviewedBy: "reviewer-1" },
+      { client: "test" },
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.review_state).toBe("merged");
+
+    // File content must be replaced
+    const updatedContent = readFS(noFmPath, "utf8");
+    expect(updatedContent).toContain("newmarkerfm456");
+    expect(updatedContent).not.toContain("oldmarkerfm123");
+  });
+
   it("approve on a blocked (secret_detected) proposal refuses with an error", async () => {
     const { createProposal, reviewProposal } = await getModules(dir);
 

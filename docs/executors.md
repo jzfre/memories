@@ -72,7 +72,7 @@ so that relative paths to `.env` and `config.yaml` resolve correctly.
 full path returned by `which tsx`.
 
 LM Studio is the **recommended embedding provider**: configure the `nomic-embed-text`
-(or compatible nomic) model in LM Studio and point `EMBED_BASE_URL` in `.env` at the
+(or compatible nomic) model in LM Studio and point `EMBEDDINGS_URL` in `.env` at the
 local server (default `http://localhost:1234/v1`).  Embeddings are computed locally
 regardless of which chat model is in use.
 

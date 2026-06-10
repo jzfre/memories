@@ -120,6 +120,61 @@ export async function createProposal(
     targetDocumentId = input.target_document_id;
     sourceRefs = input.source_refs ?? [];
     confidence = input.confidence ?? "unknown";
+
+    // Frontmatter injection guard: patch content must not begin with a --- block
+    const trimmedContent = input.content.trimStart();
+    const firstLine = trimmedContent.split("\n")[0] ?? "";
+    if (/^---\s*$/.test(firstLine)) {
+      const injId = randomUUID();
+      const injFlag = {
+        code: "frontmatter_injection",
+        message: "Patch content must not begin with a frontmatter block",
+      };
+      await prisma.knowledgeEvent.create({
+        data: {
+          id: randomUUID(),
+          eventType: "proposal.created",
+          sourceType: "patch",
+          namespace,
+          sensitivity,
+          payload: input as object,
+          createdBy: actor,
+        },
+      });
+      await prisma.proposal.create({
+        data: {
+          id: injId,
+          proposalType: "patch",
+          namespace,
+          sensitivity,
+          title: input.title,
+          kind,
+          proposedContent: input.content,
+          targetDocumentId: input.target_document_id,
+          sourceRefs: input.source_refs ?? [],
+          confidence: input.confidence ?? "unknown",
+          reviewState: "rejected",
+          reviewerNotes: injFlag.message,
+          validationFlags: [injFlag] as object[],
+          createdBy: actor,
+        },
+      });
+      await writeAudit({
+        actor,
+        client: ctx.client,
+        action,
+        namespace,
+        sensitivityRequested: sensitivity,
+        inputs: input,
+        returnedDocumentIds: [injId],
+        approved: false,
+      });
+      return {
+        proposal_id: injId,
+        review_state: "rejected",
+        message: injFlag.message,
+      };
+    }
   } else {
     namespace = input.namespace;
     sensitivity = input.sensitivity;
@@ -386,7 +441,12 @@ export async function reviewProposal(
 
   // --- approve: defense-in-depth — refuse if proposal has any blocking flag ---
   const storedFlags = (proposal.validationFlags ?? []) as Array<{ code: string }>;
-  const blockingCodes = ["secret_detected", "namespace_invalid", "sensitivity_invalid"];
+  const blockingCodes = [
+    "secret_detected",
+    "namespace_invalid",
+    "sensitivity_invalid",
+    "frontmatter_injection",
+  ];
   const blockingFlag = storedFlags.find((f) => blockingCodes.includes(f.code));
   if (blockingFlag) {
     throw new Error(
@@ -487,6 +547,15 @@ async function approvePatched(
   if (!resolvedFilePath.startsWith(resolvedVaultRoot + sep)) {
     throw new Error(
       `Path traversal detected: resolved path "${resolvedFilePath}" is outside vault root "${resolvedVaultRoot}".`,
+    );
+  }
+
+  // Defense-in-depth: refuse if proposedContent starts with a frontmatter block
+  const trimmedProposed = proposal.proposedContent.trimStart();
+  const firstProposedLine = trimmedProposed.split("\n")[0] ?? "";
+  if (/^---\s*$/.test(firstProposedLine)) {
+    throw new Error(
+      `Cannot approve patch proposal ${proposal.id}: proposedContent begins with a frontmatter block (frontmatter_injection).`,
     );
   }
 

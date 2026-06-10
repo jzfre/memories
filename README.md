@@ -49,7 +49,7 @@ All commands run from the repo root via pnpm scripts:
 | `pnpm reembed`                                        | Backfill embeddings for chunks that lack one              |
 | `pnpm status`                                         | Show document/chunk/embedding/validation counts           |
 | `pnpm proposals`                                      | List pending proposals                                    |
-| `pnpm proposals -- --state approved`                  | Filter by review state                                    |
+| `pnpm proposals -- --state merged`                    | Filter by review state                                    |
 | `pnpm proposals -- review <id> --approve`             | Approve a proposal (writes Markdown to vault)             |
 | `pnpm proposals -- review <id> --reject`              | Reject a proposal (retained in DB)                        |
 | `pnpm proposals -- review <id> --needs-evidence`      | Request more evidence                                     |
