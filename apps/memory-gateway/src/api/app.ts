@@ -11,7 +11,9 @@ import { createProposal, listProposals, reviewProposal } from "../proposals/inde
 import {
   ProposalCreateBodySchema,
   ProposalReviewBodySchema,
+  ContextPackBodySchema,
 } from "./schemas";
+import { buildContextPack } from "../retrieval/context-pack";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -124,6 +126,18 @@ export function buildApp(): FastifyInstance {
       return reply.code(404).send({ error: "proposal not found" });
     }
     return result;
+  });
+
+  // ---------------------------------------------------------------------------
+  // Context pack endpoint
+  // ---------------------------------------------------------------------------
+
+  app.post("/memory/context-pack", async (req, reply) => {
+    const parsed = ContextPackBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid input", details: parsed.error.flatten() });
+    }
+    return buildContextPack(parsed.data, { client: "rest" });
   });
 
   return app;

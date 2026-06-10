@@ -12,7 +12,7 @@ interface Section {
   lines: string[];
 }
 
-function approxTokens(text: string): number {
+export function approxTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
 }
 

@@ -25,12 +25,13 @@ async function connectClient() {
 describe("MCP server", () => {
   beforeEach(resetDb);
 
-  it("exposes the six tools", async () => {
+  it("exposes the seven tools", async () => {
     const client = await connectClient();
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
       "health_status",
+      "memory_context_pack",
       "memory_fetch",
       "memory_list_proposals",
       "memory_propose_note",

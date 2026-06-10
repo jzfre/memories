@@ -58,11 +58,12 @@ afterAll(async () => {
 });
 
 describe("MCP server / tool registry", () => {
-  it("exposes exactly the six tools, each with a description and input schema, and NO review tool", async () => {
+  it("exposes exactly the seven tools, each with a description and input schema, and NO review tool", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
       "health_status",
+      "memory_context_pack",
       "memory_fetch",
       "memory_list_proposals",
       "memory_propose_note",
