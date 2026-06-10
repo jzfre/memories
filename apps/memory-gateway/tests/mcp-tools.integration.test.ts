@@ -30,7 +30,9 @@ function asJson(res: any): any {
   return JSON.parse(res.content[0].text);
 }
 async function clearSideEffects(): Promise<void> {
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "audit_log","retrieval_traces" RESTART IDENTITY');
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "audit_log","retrieval_traces","proposals","knowledge_events" RESTART IDENTITY',
+  );
 }
 
 beforeAll(async () => {
@@ -56,9 +58,19 @@ afterAll(async () => {
 });
 
 describe("MCP server / tool registry", () => {
-  it("exposes exactly the three tools, each with a description and input schema", async () => {
+  it("exposes exactly the six tools, each with a description and input schema, and NO review tool", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["health_status", "memory_fetch", "memory_search"]);
+    const names = tools.map((t) => t.name).sort();
+    expect(names).toEqual([
+      "health_status",
+      "memory_fetch",
+      "memory_list_proposals",
+      "memory_propose_note",
+      "memory_propose_patch",
+      "memory_search",
+    ]);
+    // v1 must not expose any review/approve tool over MCP (Tier 2 restricted to CLI/REST)
+    expect(names.some((n) => n.includes("review") || n.includes("approve"))).toBe(false);
     for (const t of tools) {
       expect(t.description && t.description.length).toBeGreaterThan(0);
       expect(t.inputSchema).toBeTruthy();
@@ -343,5 +355,100 @@ describe("archived documents (MCP)", () => {
     const ids = asJson(await call("memory_search", { query: "pgvector" })).results.map((r: any) => r.document_id);
     expect(ids).not.toContain("welcome");
     expect(ids).toContain(IN_SCOPE_DECISION); // a non-archived in-scope doc still returns
+  });
+});
+
+describe("memory_propose_note (MCP)", () => {
+  it("creates a pending proposal row and NO vault file; review_state is pending_review", async () => {
+    const res = await call("memory_propose_note", {
+      namespace: "personal",
+      sensitivity: "private",
+      title: "MCP Test Proposal",
+      content: "Some test content from the MCP client.",
+    });
+    expect(res.isError).toBeFalsy();
+    const payload = asJson(res);
+    expect(payload.review_state).toBe("pending_review");
+    expect(typeof payload.proposal_id).toBe("string");
+    expect(payload.message).toBe("Proposal created. Not written to canonical vault yet.");
+
+    // DB row exists with correct state
+    const row = await prisma.proposal.findUnique({ where: { id: payload.proposal_id } });
+    expect(row).not.toBeNull();
+    expect(row?.reviewState).toBe("pending_review");
+    expect(row?.title).toBe("MCP Test Proposal");
+    expect(row?.createdBy).toBe("test");
+
+    // Fixture vault is unchanged — no new file was written under it
+    const { readdirSync } = await import("node:fs");
+    const vaultFiles = readdirSync(VAULT, { recursive: true });
+    expect(vaultFiles.some((f) => String(f).includes("mcp-test-proposal"))).toBe(false);
+  });
+
+  it("records a knowledge_event and an approved audit row for an accepted proposal", async () => {
+    await call("memory_propose_note", {
+      namespace: "personal",
+      sensitivity: "private",
+      title: "Audit Trail Test",
+      content: "Checking the audit trail.",
+    });
+    const events = await prisma.knowledgeEvent.findMany({ where: { eventType: "proposal.created" } });
+    expect(events).toHaveLength(1);
+    const audit = await prisma.auditLog.findFirst({ where: { action: "memory.propose_note" } });
+    expect(audit?.client).toBe("mcp");
+    expect(audit?.approved).toBe(true);
+  });
+
+  it("rejects a proposal with a disallowed namespace (state=rejected, row retained, no vault file)", async () => {
+    const res = await call("memory_propose_note", {
+      namespace: "work/client-b",
+      sensitivity: "client-confidential",
+      title: "Disallowed Namespace Proposal",
+      content: "Should be rejected.",
+    });
+    expect(res.isError).toBeFalsy();
+    const payload = asJson(res);
+    expect(payload.review_state).toBe("rejected");
+    // Row is still retained in DB
+    const row = await prisma.proposal.findUnique({ where: { id: payload.proposal_id } });
+    expect(row?.reviewState).toBe("rejected");
+  });
+});
+
+describe("memory_list_proposals (MCP)", () => {
+  it("returns proposals created via memory_propose_note and supports reviewState filter", async () => {
+    // Create two proposals
+    const r1 = asJson(
+      await call("memory_propose_note", {
+        namespace: "personal",
+        sensitivity: "private",
+        title: "List Test A",
+        content: "Content A",
+      }),
+    );
+    const r2 = asJson(
+      await call("memory_propose_note", {
+        namespace: "work/client-b", // disallowed → rejected
+        sensitivity: "private",
+        title: "List Test B",
+        content: "Content B",
+      }),
+    );
+
+    // List all proposals (no filter)
+    const all = asJson(await call("memory_list_proposals", {}));
+    expect(Array.isArray(all)).toBe(true);
+    const ids = all.map((p: any) => p.id);
+    expect(ids).toContain(r1.proposal_id);
+    expect(ids).toContain(r2.proposal_id);
+
+    // Filter by reviewState=pending_review
+    const pending = asJson(await call("memory_list_proposals", { reviewState: "pending_review" }));
+    expect(pending.map((p: any) => p.id)).toContain(r1.proposal_id);
+    expect(pending.map((p: any) => p.id)).not.toContain(r2.proposal_id);
+
+    // Filter by reviewState=rejected
+    const rejected = asJson(await call("memory_list_proposals", { reviewState: "rejected" }));
+    expect(rejected.map((p: any) => p.id)).toContain(r2.proposal_id);
   });
 });

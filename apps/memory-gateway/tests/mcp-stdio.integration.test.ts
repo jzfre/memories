@@ -57,9 +57,16 @@ afterAll(async () => {
 });
 
 describe("MCP over real stdio transport", () => {
-  it("lists the three tools across a real process boundary", async () => {
+  it("lists the six tools across a real process boundary", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["health_status", "memory_fetch", "memory_search"]);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      "health_status",
+      "memory_fetch",
+      "memory_list_proposals",
+      "memory_propose_note",
+      "memory_propose_patch",
+      "memory_search",
+    ]);
   });
 
   it("memory_search returns the title-only match (the LM Studio query) over stdio", async () => {
