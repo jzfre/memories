@@ -7,6 +7,11 @@ import { scanVault } from "../ingest/indexer";
 import { computeIndexStatus } from "../status/index";
 import { writeAudit } from "../audit/index";
 import { loadConfig } from "../config/index";
+import { createProposal, listProposals, reviewProposal } from "../proposals/index";
+import {
+  ProposalCreateBodySchema,
+  ProposalReviewBodySchema,
+} from "./schemas";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -47,6 +52,78 @@ export function buildApp(): FastifyInstance {
     const doc = await fetchDocument(id, { client: "rest" });
     if (!doc) return reply.code(404).send({ error: "not found" });
     return doc;
+  });
+
+  // ---------------------------------------------------------------------------
+  // Proposals endpoints
+  // ---------------------------------------------------------------------------
+
+  app.post("/proposals", async (req, reply) => {
+    const parsed = ProposalCreateBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid input", details: parsed.error.flatten() });
+    }
+
+    const body = parsed.data;
+    let input;
+    if (body.type === "patch") {
+      input = {
+        proposal_type: "patch" as const,
+        target_document_id: body.target_document_id,
+        title: body.title,
+        content: body.content,
+        source_refs: body.source_refs,
+        confidence: body.confidence,
+      };
+    } else {
+      input = {
+        namespace: (body as { namespace: string }).namespace,
+        sensitivity: (body as { sensitivity: string }).sensitivity,
+        title: body.title,
+        kind: (body as { kind?: string }).kind,
+        content: body.content,
+        source_refs: body.source_refs,
+        confidence: body.confidence,
+      };
+    }
+
+    return createProposal(input, { client: "rest" });
+  });
+
+  app.get("/proposals", async (req) => {
+    const query = (req.query ?? {}) as { state?: string; namespace?: string };
+    return listProposals(
+      { reviewState: query.state, namespace: query.namespace },
+      { client: "rest" },
+    );
+  });
+
+  app.post("/proposals/:id/review", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = ProposalReviewBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid input", details: parsed.error.flatten() });
+    }
+
+    const { action, reviewer_notes } = parsed.data;
+    const { actor } = loadConfig();
+
+    let result;
+    try {
+      result = await reviewProposal(
+        id,
+        { action, reviewerNotes: reviewer_notes, reviewedBy: actor },
+        { client: "rest" },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(409).send({ error: message });
+    }
+
+    if (!result) {
+      return reply.code(404).send({ error: "proposal not found" });
+    }
+    return result;
   });
 
   return app;
