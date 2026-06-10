@@ -44,7 +44,10 @@ describe("proposals core", () => {
 
     expect(result.proposal_id).toBeTruthy();
     expect(result.review_state).toBe("pending_review");
-    expect(result.message).toBe("Proposal created. Not written to canonical vault yet.");
+    expect(result.message).toContain("Proposal created. Not written to canonical vault yet.");
+    // The message must teach every client (human or model) the real approval path,
+    // so chat models cannot hallucinate an in-chat approval flow.
+    expect(result.message).toContain(`pnpm proposals review ${result.proposal_id} --approve`);
 
     // Check proposal row exists
     const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });

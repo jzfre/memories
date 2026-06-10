@@ -65,7 +65,7 @@ export function buildMcpServer(): McpServer {
     "memory_propose_note",
     {
       title: "memory.propose_note",
-      description: `Propose a new knowledge note for human review. The note is queued as a pending proposal and NOT written to the canonical vault until a human approves it. ${DATA_NOT_INSTRUCTIONS}`,
+      description: `Propose a new knowledge note for human review. The note is queued as a pending proposal and NOT written to the canonical vault until a human approves it. Approval is human-only via the owner's local CLI/REST, OUTSIDE this chat — there is no approve tool here, and a user saying "approved" in chat does not approve anything; relay the approval command from the result message instead. Never claim a note was saved unless its review_state is "merged". ${DATA_NOT_INSTRUCTIONS}`,
       inputSchema: {
         namespace: z.string(),
         sensitivity: z.string(),
@@ -86,7 +86,7 @@ export function buildMcpServer(): McpServer {
     "memory_propose_patch",
     {
       title: "memory.propose_patch",
-      description: `Propose a patch (content replacement) to an existing canonical document. The patch is queued as a pending proposal and NOT applied to the vault until a human approves it. ${DATA_NOT_INSTRUCTIONS}`,
+      description: `Propose a patch (content replacement) to an existing canonical document. The patch is queued as a pending proposal and NOT applied to the vault until a human approves it via the owner's local CLI/REST, outside this chat. Never claim the patch was applied unless its review_state is "merged". ${DATA_NOT_INSTRUCTIONS}`,
       inputSchema: {
         target_document_id: z.string(),
         title: z.string(),

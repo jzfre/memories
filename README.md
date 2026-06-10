@@ -49,17 +49,17 @@ All commands run from the repo root via pnpm scripts:
 | Command                                               | Description                                               |
 |-------------------------------------------------------|-----------------------------------------------------------|
 | `pnpm scan`                                           | Ingest / re-ingest vault into Postgres index              |
-| `pnpm scan -- --dry-run`                              | Preview what would change without writing                 |
+| `pnpm scan --dry-run`                                 | Preview what would change without writing                 |
 | `pnpm rebuild`                                        | Wipe the derived index and re-scan from scratch           |
 | `pnpm reembed`                                        | Backfill embeddings for chunks that lack one              |
 | `pnpm status`                                         | Show document/chunk/embedding/validation counts           |
 | `pnpm proposals`                                      | List pending proposals                                    |
-| `pnpm proposals -- --state merged`                    | Filter by review state                                    |
-| `pnpm proposals -- review <id> --approve`             | Approve a proposal (writes Markdown to vault)             |
-| `pnpm proposals -- review <id> --reject`              | Reject a proposal (retained in DB)                        |
-| `pnpm proposals -- review <id> --needs-evidence`      | Request more evidence                                     |
+| `pnpm proposals --state merged`                       | Filter by review state                                    |
+| `pnpm proposals review <id> --approve`                | Approve a proposal (writes Markdown to vault)             |
+| `pnpm proposals review <id> --reject`                 | Reject a proposal (retained in DB)                        |
+| `pnpm proposals review <id> --needs-evidence`         | Request more evidence                                     |
 | `pnpm audit:search`                                   | Search the audit log (alias for `audit` subcommand)       |
-| `pnpm audit:search -- --action memory.search`         | Filter audit log by action                                |
+| `pnpm audit:search --action memory.search`            | Filter audit log by action                                |
 | `pnpm api`                                            | Start REST API server on port 8787                        |
 | `pnpm mcp`                                            | Start MCP stdio server                                    |
 | `pnpm test` / `pnpm -r test`                          | Run full test suite                                       |

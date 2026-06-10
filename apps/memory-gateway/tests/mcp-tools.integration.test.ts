@@ -374,7 +374,8 @@ describe("memory_propose_note (MCP)", () => {
     const payload = asJson(res);
     expect(payload.review_state).toBe("pending_review");
     expect(typeof payload.proposal_id).toBe("string");
-    expect(payload.message).toBe("Proposal created. Not written to canonical vault yet.");
+    expect(payload.message).toContain("Proposal created. Not written to canonical vault yet.");
+    expect(payload.message).toContain(`pnpm proposals review ${payload.proposal_id} --approve`);
 
     // DB row exists with correct state
     const row = await prisma.proposal.findUnique({ where: { id: payload.proposal_id } });

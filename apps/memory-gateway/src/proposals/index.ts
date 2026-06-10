@@ -279,9 +279,12 @@ export async function createProposal(
     approved: !isRejected,
   });
 
+  // The success message doubles as client-facing documentation of the approval
+  // path: chat models relay it, which stops them inventing an in-chat approval
+  // flow ("your approval has been registered") that does not exist.
   const message = isRejected
     ? (reviewerNotes ?? "Proposal blocked by validation.")
-    : "Proposal created. Not written to canonical vault yet.";
+    : `Proposal created. Not written to canonical vault yet. Approval is human-only and happens outside this chat: the owner runs \`pnpm proposals review ${id} --approve\` (or POST /proposals/${id}/review). Until review_state is "merged", the note is NOT saved.`;
 
   return { proposal_id: id, review_state: reviewState, message };
 }

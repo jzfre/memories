@@ -186,7 +186,7 @@ memory_propose_note ──────► validation engine
                              (vault untouched — guaranteed & tested)
                                       │
                                       │   pnpm proposals            ◄── you list
-                                      │   pnpm proposals -- review <id> --approve
+                                      │   pnpm proposals review <id> --approve
                                       ▼        --reject / --needs-evidence
                              approve: write Markdown + frontmatter
                                to vault/00-inbox/reviewed/<date>-<slug>.md
@@ -306,15 +306,41 @@ decision itself is auditable; the vault is never touched.
 ```bash
 # An AI proposed something (via MCP). You review:
 pnpm proposals                                   # list: id · state · namespace · title
-pnpm proposals -- review 2915…f08f --approve     # → merged, file written + indexed
-pnpm proposals -- review 77aa…12c0 --reject --notes "wrong project"
-pnpm audit:search -- --action proposal.review    # the decisions are on the record
+pnpm proposals review 2915…f08f --approve        # → merged, file written + indexed
+pnpm proposals review 77aa…12c0 --reject --notes "wrong project"
+pnpm audit:search --action proposal.review       # the decisions are on the record
 cd "~/Documents/Obsidian Vault" && git add -A && git commit -m "accept: …"
 ```
 
 ---
 
-## 5. Security model in one place
+## 5. Frontmatter field reference — what each field means and DOES
+
+Vocabularies live in `packages/shared/src/types.ts`; enforcement in `config.yaml` and
+`src/proposals/validate.ts`. "Behavior" = what the tool actually does with the value;
+everything else is a label for you and your AI clients to reason with.
+
+| Field | Values | Default | Behavior in the tool |
+|---|---|---|---|
+| `namespace` | your `config.yaml` allowlist (`personal`, `career`, `brain-gym`, `home`, `public-research`, `testing`) | `personal` | **Hard scope boundary.** Search/fetch only return notes whose namespace is in the allowed scope; proposals outside the allowlist are rejected. |
+| `sensitivity` | `public` `internal` `private` `confidential` `client-confidential` `secret-adjacent` `restricted` — **only the first three are allowlisted today** | `private` | **Set-membership, not a hierarchy** — `internal` does not "include" `public`; a note is retrievable iff its label is in `allowed_sensitivity`. Conventional meaning: `public` = shareable anywhere, `internal` = yours but not secret (OK for cloud models), `private` = sensitive-personal (local models by default). `client-confidential`/`secret-adjacent` additionally force `human_review_required` on proposals. |
+| `kind` | `note` `finding` `decision` `runbook` `project-context` `reading-note` `brain-gym-memo` `summary` `insight` | `note` | Groups context-pack sections; sets the staleness review interval (e.g. `finding` 60d, `runbook` 90d, `decision` 120d); unknown kinds lower the proposal score. |
+| `status` | `draft` `active` `superseded` `stale` `archived` | `active` | **Only `archived` changes behavior** (hidden from all retrieval; set automatically when a file disappears from the vault). The others are curation labels for you. |
+| `confidence` | `confirmed` `high` `medium` `low` `unknown` | `unknown` | Pure metadata: surfaced on every search result so you/the AI can weigh trust. Does **not** affect ranking (yet — roadmap). |
+| `tags` | free-form list | `[]` | Indexed into full-text search (weight A) — a tag-only word still finds the note. |
+| `id` | stable note id | derived from path | Identity across renames: keep `id` in frontmatter and you can move the file without creating a duplicate. |
+
+Missing `namespace`/`sensitivity` never blocks indexing — the defaults apply and the
+note is flagged `incomplete` (visible in `pnpm status`, slightly down-ranked in search).
+
+**For AI clients capturing memories:** the `capturing-memories` skill
+(`skills/capturing-memories/SKILL.md`, installed at `~/.claude/skills/`) instructs
+agents to **ask you** for missing fields instead of guessing, and to relay the real
+approval command instead of pretending chat approval works.
+
+---
+
+## 6. Security model in one place
 
 - **Scope = intersection.** Every retrieval intersects the request with the
   `config.yaml` allowlists; requests can only narrow, never widen. Empty intersection
@@ -334,7 +360,7 @@ cd "~/Documents/Obsidian Vault" && git add -A && git commit -m "accept: …"
 
 ---
 
-## 6. Pointers
+## 7. Pointers
 
 - Operational commands, endpoints, MCP tools: `README.md`
 - Client setup (Claude Code, VS Code, LM Studio, Hermes, OpenClaw) + local model
