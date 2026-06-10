@@ -33,3 +33,6 @@ it runs with the correct working directory (`.env` + `config.yaml` resolve from 
 
 After connecting, the client should list `memory_search`, `memory_fetch`, and
 `health_status`. All calls are recorded in the `audit_log` table.
+
+For LM Studio, Hermes, OpenClaw/IronClaw, and local model policy, see
+[docs/executors.md](executors.md).
