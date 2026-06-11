@@ -11,6 +11,8 @@ build/
 .env
 .env.*
 !.env.example
+.npmrc
+!.npmrc.example
 
 # Prisma
 prisma/*.db

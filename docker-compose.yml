@@ -1,6 +1,10 @@
 services:
   db:
-    image: pgvector/pgvector:pg16
+    # Override on restricted networks by setting POSTGRES_IMAGE in a repo-root .env
+    # to your Artifactory-proxied path, e.g.
+    #   POSTGRES_IMAGE=artifactory.example.com/docker-remote/pgvector/pgvector:pg16
+    # Compose auto-loads repo-root .env. Default works on open networks.
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
     container_name: memories-db
     environment:
       POSTGRES_USER: memories

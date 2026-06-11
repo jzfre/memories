@@ -1,0 +1,8 @@
+# Copy to `.npmrc` (gitignored — it holds a token) on restricted networks to install
+# dependencies from your internal Artifactory npm mirror instead of public npmjs.
+# pnpm install --frozen-lockfile resolves the committed pnpm-lock.yaml against this
+# registry (Artifactory proxies the same tarballs, so integrity hashes still match).
+
+registry=https://artifactory.example.com/artifactory/api/npm/npm-virtual/
+//artifactory.example.com/artifactory/api/npm/npm-virtual/:_authToken=${NPM_TOKEN}
+always-auth=true

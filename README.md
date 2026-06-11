@@ -139,4 +139,5 @@ pnpm -r typecheck
 - [Connecting MCP clients](docs/mcp-clients.md)
 - [Executor guides](docs/executors.md) — Claude Code, VS Code, LM Studio, Hermes, OpenClaw/IronClaw, local model policy
 - [Backup and restore](docs/backup-restore.md)
+- [Deploying on a restricted/locked-down machine](docs/deploy-restricted.md) — Artifactory mirrors, FTS-only mode, Git LFS for the model
 - [Implementation plan](docs/implementation-plan.md)
