@@ -524,6 +524,12 @@ export async function reviewProposal(
     "namespace_invalid",
     "sensitivity_invalid",
     "frontmatter_injection",
+    "invalid_kind",
+    "invalid_confidence",
+    "invalid_status",
+    "invalid_tags",
+    "body_frontmatter_injection",
+    "missing_required_section",
   ];
   const blockingFlag = storedFlags.find((f) => blockingCodes.includes(f.code));
   if (blockingFlag) {

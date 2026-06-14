@@ -610,4 +610,17 @@ describe("validateProposal wired into createProposal", () => {
     const fileContent = readFileSync(join(dir, result!.document_path!), "utf8");
     expect(fileContent).toContain("tags: [db/postgres, work]");
   });
+
+  it("approve refuses a proposal carrying a missing_required_section blocking flag", async () => {
+    const { createProposal, reviewProposal } = await getModules(dir);
+    const created = await createProposal(
+      { namespace: "personal", sensitivity: "public", title: "Half Decision", content: "## Claim\nonly a claim, missing the rest of the decision sections here.", source_refs: ["ref-1"], kind: "decision" },
+      { client: "test" },
+    );
+    // It is already rejected by validation; force it to pending to exercise the approve-time guard.
+    await prisma.proposal.update({ where: { id: created.proposal_id }, data: { reviewState: "pending_review" } });
+    await expect(
+      reviewProposal(created.proposal_id, { action: "approve", reviewedBy: "x" }, { client: "test" }),
+    ).rejects.toThrow();
+  });
 });
