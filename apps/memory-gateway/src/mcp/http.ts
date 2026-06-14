@@ -23,10 +23,12 @@ export function isAuthorized(
   const u = new URL(urlPath, "http://localhost");
   const segs = u.pathname.split("/").filter(Boolean);
   if (segs[segs.length - 1] !== "mcp") return false;
-  const pathToken = segs.length >= 2 ? segs[0]! : "";
+  // Bearer header is accepted on any *-/mcp path (e.g. /mcp).
   const auth = headers["authorization"];
   const bearer = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  return safeEq(pathToken, token) || safeEq(bearer, token);
+  if (bearer && safeEq(bearer, token)) return true;
+  // Capability URL must be EXACTLY /<token>/mcp — no extra path segments.
+  return segs.length === 2 && safeEq(segs[0]!, token);
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
