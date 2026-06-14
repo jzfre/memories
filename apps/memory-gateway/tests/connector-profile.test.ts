@@ -38,4 +38,15 @@ describe("resolveProfile", () => {
     const p = resolveProfile("narrow");
     expect(p.scope.namespaces).toEqual(["personal"]); // 'forbidden' dropped
   });
+
+  it("MCP_HTTP_PUBLIC_BASE_URL env overrides the connector's public_base_url", async () => {
+    const { resolveProfile } = await load();
+    expect(resolveProfile("chatgpt").publicBaseUrl).toBe("https://example/mcp"); // from config
+    process.env.MCP_HTTP_PUBLIC_BASE_URL = "https://tunnel.example/abc/mcp";
+    try {
+      expect(resolveProfile("chatgpt").publicBaseUrl).toBe("https://tunnel.example/abc/mcp");
+    } finally {
+      delete process.env.MCP_HTTP_PUBLIC_BASE_URL;
+    }
+  });
 });

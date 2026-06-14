@@ -46,6 +46,7 @@ export function resolveProfile(name: string): ResolvedProfile {
       review: raw.capabilities.includes("review"),
     },
     scope: { namespaces: ns, sensitivities: se },
-    publicBaseUrl: raw.public_base_url,
+    // Env var overrides the per-connector config value (used for ChatGPT citation URLs).
+    publicBaseUrl: process.env.MCP_HTTP_PUBLIC_BASE_URL || raw.public_base_url,
   };
 }
