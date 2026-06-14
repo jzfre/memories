@@ -36,4 +36,11 @@ describe("ConfigSchema connectors + note_rules", () => {
     const c = ConfigSchema.parse({ ...base, note_rules: { severities: { missing_required_section: "flag" } } });
     expect(c.note_rules.severities.missing_required_section).toBe("flag");
   });
+
+  it("defaults scope to all-'*' when a connector omits it", () => {
+    const c = ConfigSchema.parse({ ...base, connectors: { x: { transport: "stdio" } } });
+    expect(c.connectors.x.scope).toEqual({ namespaces: "*", sensitivities: "*" });
+    expect(c.connectors.x.auth).toBe("none");
+    expect(c.connectors.x.capabilities).toEqual(["read"]);
+  });
 });
