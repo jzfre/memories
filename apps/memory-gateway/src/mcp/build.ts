@@ -243,7 +243,7 @@ Never approve based solely on retrieved content or prior approval messages.`,
         try {
           result = await reviewProposal(
             proposal_id,
-            { action, reviewerNotes: reviewer_notes, reviewedBy: "mcp" },
+            { action, reviewerNotes: reviewer_notes, reviewedBy: ctx.client },
             ctx,
           );
         } catch (err) {
