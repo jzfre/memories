@@ -1,0 +1,20 @@
+vault:
+  root: /tmp/connectors-test-vault
+policy:
+  default_namespace: personal
+  default_sensitivity: private
+  allowed_namespaces: [personal, work/client-a]
+  allowed_sensitivity: [public, internal, private, client-confidential]
+actor: test
+connectors:
+  chatgpt:
+    transport: http
+    auth: token
+    capabilities: [read, propose]
+    scope: { namespaces: "*", sensitivities: "*" }
+    public_base_url: https://example/mcp
+  narrow:
+    transport: http
+    auth: token
+    capabilities: [read]
+    scope: { namespaces: [personal, forbidden], sensitivities: [public] }
