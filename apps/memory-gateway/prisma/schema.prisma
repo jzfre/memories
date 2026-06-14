@@ -106,6 +106,7 @@ model Proposal {
   proposedContent   String    @map("proposed_content")
   targetDocumentId  String?   @map("target_document_id")
   sourceRefs        String[]  @default([]) @map("source_refs")
+  tags              String[]  @default([]) @map("tags")
   confidence        String    @default("unknown")
   reviewState       String    @default("pending_review") @map("review_state")
   reviewerNotes     String?   @map("reviewer_notes")
