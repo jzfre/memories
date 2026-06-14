@@ -8,3 +8,20 @@ policy:
   allowed_sensitivity: [public, internal, private]
 
 actor: jr
+
+connectors:
+  claude-code:
+    transport: stdio
+    auth: none
+    capabilities: [read, propose, review]
+    scope: { namespaces: "*", sensitivities: "*" }
+  chatgpt:
+    transport: http
+    auth: token
+    capabilities: [read, propose]   # no 'review' — approval stays terminal-only
+    scope: { namespaces: "*", sensitivities: "*" }   # all namespaces + sensitivities (incl. private — see spec D5)
+    public_base_url: ""             # set to your tunnel URL prefix, e.g. https://<host>/<MCP_HTTP_TOKEN>
+
+note_rules:
+  quarantine_invalid: false
+  severities: {}                    # e.g. { missing_required_section: flag } to relax structured-kind enforcement

@@ -12,6 +12,7 @@
     "audit:search": "tsx src/cli/index.ts audit",
     "api": "tsx watch src/api/server.ts",
     "mcp": "tsx src/mcp/index.ts",
+    "mcp:http": "tsx src/mcp/http.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "prisma generate",
