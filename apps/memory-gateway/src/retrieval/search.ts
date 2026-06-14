@@ -58,14 +58,14 @@ function freshnessPenalty(f: { validation: string; embedding: string }): number 
 
 export async function search(
   args: SearchArgs,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
   deps: SearchDeps = {},
 ): Promise<SearchResponse> {
   const { actor, note_rules } = loadConfig();
-  const scope = resolveScope({
-    namespaces: args.namespaces,
-    sensitivityAllowed: args.sensitivity_allowed,
-  });
+  const scope = resolveScope(
+    { namespaces: args.namespaces, sensitivityAllowed: args.sensitivity_allowed },
+    ctx.scope,
+  );
   const topK = args.top_k ?? 10;
   const embedder = deps.embedder ?? getDefaultEmbedder();
 

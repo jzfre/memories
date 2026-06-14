@@ -24,10 +24,10 @@ export interface TraceExplanation {
 
 export async function recentDocuments(
   { limit }: { limit?: number },
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
 ): Promise<RecentDocument[]> {
   const { actor } = loadConfig();
-  const scope = resolveScope({});
+  const scope = resolveScope({}, ctx.scope);
   const take = Math.min(limit ?? 10, 50);
 
   const docs = await prisma.document.findMany({
@@ -74,7 +74,7 @@ export async function recentDocuments(
 
 export async function explainSources(
   traceId: string,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
 ): Promise<TraceExplanation | null> {
   const { actor } = loadConfig();
 

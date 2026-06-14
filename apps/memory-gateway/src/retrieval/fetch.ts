@@ -20,10 +20,10 @@ export interface FetchedDocument {
 
 export async function fetchDocument(
   documentId: string,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
 ): Promise<FetchedDocument | null> {
   const { actor, note_rules } = loadConfig();
-  const scope = resolveScope({});
+  const scope = resolveScope({}, ctx.scope);
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
 
   const allowed =

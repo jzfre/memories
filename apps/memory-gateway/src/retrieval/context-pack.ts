@@ -42,7 +42,7 @@ const DEFAULT_MAX_TOKENS = 6000;
  */
 export async function buildContextPack(
   input: ContextPackInput,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
   deps: SearchDeps = {},
 ): Promise<ContextPack> {
   const maxTokens = input.max_tokens ?? DEFAULT_MAX_TOKENS;
