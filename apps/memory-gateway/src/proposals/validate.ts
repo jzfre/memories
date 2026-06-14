@@ -4,8 +4,7 @@
  * No I/O; all side-effects belong in callers.
  */
 
-import { validateNoteFields, validateNoteBody, type SeverityOverrides } from "@memories/shared";
-import { KIND_VALUES } from "@memories/shared";
+import { validateNoteFields, validateNoteBody, KIND_VALUES, type SeverityOverrides } from "@memories/shared";
 
 export interface ValidationFlag {
   code: string;
