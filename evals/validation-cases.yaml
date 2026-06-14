@@ -86,7 +86,21 @@ cases:
       sensitivity: client-confidential
       title: "Client A Q3 performance findings"
       kind: finding
-      content: "The Q3 performance analysis reveals a 15% throughput regression in the client-a pipeline under peak load conditions. Root cause identified as lock contention in the batch processor. Recommended remediation: implement optimistic locking pattern."
+      content: |
+        ## Finding
+        Q3 analysis reveals a 15% throughput regression in the client-a pipeline under peak load.
+        ## Evidence
+        Load tests show lock contention in the batch processor at peak concurrency.
+        ## Source references
+        audit-log-2026-Q3
+        ## Confidence
+        medium
+        ## Validation needed
+        Re-run the peak-load benchmark after applying the locking change.
+        ## Risk if wrong
+        A misattributed root cause could waste remediation effort.
+        ## Related notes
+        Batch processor design notes.
       source_refs:
         - "audit-log-2026-Q3"
     expect:
