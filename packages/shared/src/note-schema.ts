@@ -108,6 +108,8 @@ export function validateNoteBody(body: string, kind: string, overrides?: Severit
   }
 
   // 3. Malformed / empty wikilink: unbalanced [[ ]] pairs, or an empty [[]].
+  // NOTE: heuristic only — counts [[ vs ]] and does not parse Markdown code fences/spans,
+  // so a stray `]]` inside code can false-positive. Severity is "flag" (never blocks).
   const opens = (body.match(/\[\[/g) ?? []).length;
   const closes = (body.match(/\]\]/g) ?? []).length;
   if (opens !== closes || /\[\[\s*\]\]/.test(body)) {

@@ -5,6 +5,8 @@ import {
   validateNoteBody,
   validateNote,
   hasBlocking,
+  STRUCTURED_KINDS,
+  BODY_TEMPLATES,
 } from "../src/note-schema";
 
 const okFields = { kind: "note", confidence: "high", status: "active", tags: ["work", "db/postgres"] };
@@ -73,6 +75,33 @@ describe("validateNoteBody", () => {
     ].join("\n");
     expect(validateNoteBody(body, "decision")).toEqual([]);
   });
+
+  it("blocks a finding missing required sections (multi-word section names)", () => {
+    const issues = validateNoteBody("## Finding\nstuff", "finding");
+    const miss = issues.find((i) => i.code === "missing_required_section")!;
+    expect(miss.message).toContain("Source references");
+  });
+
+  it("accepts a runbook with all required sections", () => {
+    const body = ["## Purpose", "a", "## Preconditions", "b", "## Steps", "c", "## Verification", "d", "## Rollback", "e", "## Notes", "f"].join("\n");
+    expect(validateNoteBody(body, "runbook")).toEqual([]);
+  });
+
+  it("a heading that extends a required section name still satisfies it (startsWith)", () => {
+    const body = ["## Claim here", "a", "## Contextual background", "b", "## Evidence summary", "c", "## Assumptions made", "d", "## Tradeoffs analysis", "e", "## Decision outcome", "f", "## Consequences noted", "g", "## What would change this in future", "h"].join("\n");
+    expect(validateNoteBody(body, "decision")).toEqual([]);
+  });
+
+  it("a heading that is only a prefix/typo of a required section does NOT satisfy it", () => {
+    const body = ["## Claim", "a", "## Contex", "b", "## Evidence", "c", "## Assumptions", "d", "## Tradeoffs", "e", "## Decision", "f", "## Consequences", "g", "## What would change this", "h"].join("\n");
+    const miss = validateNoteBody(body, "decision").find((i) => i.code === "missing_required_section")!;
+    expect(miss.message).toContain("Context");
+  });
+
+  it("honors a severity override in body validation (block -> flag)", () => {
+    const issues = validateNoteBody("---\nx\n---\nbody", "note", { body_frontmatter_injection: "flag" });
+    expect(issues.find((i) => i.code === "body_frontmatter_injection")!.severity).toBe("flag");
+  });
 });
 
 describe("validateNote + hasBlocking", () => {
@@ -84,5 +113,14 @@ describe("validateNote + hasBlocking", () => {
   it("KIND_VALUES is the canonical 9-kind list", () => {
     expect(KIND_VALUES).toContain("decision");
     expect(KIND_VALUES.length).toBe(9);
+  });
+
+  it("hasBlocking is false for empty or all-flag issues", () => {
+    expect(hasBlocking([])).toBe(false);
+    expect(hasBlocking([{ code: "body_raw_html", message: "x", severity: "flag" }])).toBe(false);
+  });
+
+  it("STRUCTURED_KINDS matches BODY_TEMPLATES keys exactly (no silent divergence)", () => {
+    expect([...STRUCTURED_KINDS].sort()).toEqual(Object.keys(BODY_TEMPLATES).sort());
   });
 });
