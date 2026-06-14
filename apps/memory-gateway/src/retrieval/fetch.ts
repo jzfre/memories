@@ -22,7 +22,7 @@ export async function fetchDocument(
   documentId: string,
   ctx: { client: string },
 ): Promise<FetchedDocument | null> {
-  const { actor } = loadConfig();
+  const { actor, note_rules } = loadConfig();
   const scope = resolveScope({});
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
 
@@ -30,7 +30,8 @@ export async function fetchDocument(
     !!doc &&
     scope.namespaces.includes(doc.namespace) &&
     scope.sensitivities.includes(doc.sensitivity) &&
-    doc.status !== "archived";
+    doc.status !== "archived" &&
+    !(note_rules?.quarantine_invalid && doc.validationStatus === "invalid");
 
   await writeAudit({
     actor,

@@ -35,6 +35,7 @@ export async function recentDocuments(
       namespace: { in: scope.namespaces },
       sensitivity: { in: scope.sensitivities },
       status: { not: "archived" },
+      ...(loadConfig().note_rules?.quarantine_invalid ? { validationStatus: { not: "invalid" } } : {}),
     },
     orderBy: { indexedAt: "desc" },
     take,
