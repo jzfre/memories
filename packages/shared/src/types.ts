@@ -44,6 +44,14 @@ export const VALIDATION_CODE_VALUES = [
   "missing_namespace",
   "missing_sensitivity",
   "frontmatter_parse_error",
+  "invalid_kind",
+  "invalid_confidence",
+  "invalid_status",
+  "invalid_tags",
+  "body_frontmatter_injection",
+  "body_raw_html",
+  "body_malformed_wikilink",
+  "missing_required_section",
 ] as const;
 export type ValidationCode = (typeof VALIDATION_CODE_VALUES)[number];
 
