@@ -4,6 +4,9 @@
  * No I/O; all side-effects belong in callers.
  */
 
+import { validateNoteFields, validateNoteBody, type SeverityOverrides } from "@memories/shared";
+import { KIND_VALUES } from "@memories/shared";
+
 export interface ValidationFlag {
   code: string;
   message: string;
@@ -55,22 +58,6 @@ export function detectSecrets(text: string): string[] {
 }
 
 // -------------------------------------------------------------------------
-// Known kinds (for scoring)
-// -------------------------------------------------------------------------
-
-const KNOWN_KINDS = new Set([
-  "note",
-  "finding",
-  "decision",
-  "runbook",
-  "project-context",
-  "reading-note",
-  "brain-gym-memo",
-  "summary",
-  "insight",
-]);
-
-// -------------------------------------------------------------------------
 // Sensitivities with risk score for scoring rubric
 // -------------------------------------------------------------------------
 
@@ -107,11 +94,15 @@ export function validateProposal(
     content: string;
     source_refs: string[];
     kind: string;
+    confidence?: string;
+    status?: string;
+    tags?: string[];
   },
   env: {
     allowedNamespaces: string[];
     allowedSensitivities: string[];
     existingTitles: string[];
+    severityOverrides?: SeverityOverrides;
   },
 ): ValidationResult {
   const flags: ValidationFlag[] = [];
@@ -176,6 +167,24 @@ export function validateProposal(
     });
   }
 
+  // 7. Note-schema field + body validation (single source of truth).
+  const noteIssues = [
+    ...validateNoteFields(
+      {
+        kind: input.kind,
+        confidence: input.confidence ?? "unknown",
+        status: input.status ?? "active",
+        tags: input.tags ?? [],
+      },
+      env.severityOverrides,
+    ),
+    ...validateNoteBody(input.content, input.kind, env.severityOverrides),
+  ];
+  for (const issue of noteIssues) {
+    flags.push({ code: issue.code, message: issue.message });
+    if (issue.severity === "block") blocked = true;
+  }
+
   // -----------------------------------------------------------------------
   // Scoring rubric (0–2 each, max 12)
   // -----------------------------------------------------------------------
@@ -192,8 +201,8 @@ export function validateProposal(
   // Sensitivity correctness: 2 if sensitivity allowed
   const scoreSensitivityCorrect = sensitivityAllowed ? 2 : 0;
 
-  // Actionability: 2 if kind in known kinds list
-  const scoreActionability = KNOWN_KINDS.has(input.kind) ? 2 : 0;
+  // Actionability: 2 if kind in the canonical kind list
+  const scoreActionability = (KIND_VALUES as readonly string[]).includes(input.kind) ? 2 : 0;
 
   // Risk-if-wrong inverse: based on sensitivity
   const scoreRisk = SENSITIVITY_RISK_SCORE[input.sensitivity] ?? 0;

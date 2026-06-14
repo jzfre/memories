@@ -111,7 +111,8 @@ describe("validateProposal (pure)", async () => {
         namespace: "personal",
         sensitivity: "public",
         title: "Old Finding",
-        content: "This contradicts the previous finding with new evidence here and more text.",
+        content:
+          "## Finding\nContradicts the prior finding.\n## Evidence\nnew data\n## Source references\nchat\n## Confidence\nmedium\n## Validation needed\nretest\n## Risk if wrong\nlow\n## Related notes\nnone",
         source_refs: ["ref-1"],
         kind: "finding",
       },
@@ -209,6 +210,42 @@ describe("validateProposal (pure)", async () => {
     );
     expect(result.autoPolicy).toBe("human_review_required");
     expect(result.blocked).toBe(false);
+  });
+
+  it("blocks an invalid kind", () => {
+    const result = validateProposal(
+      { namespace: "personal", sensitivity: "public", title: "T", content: "Body long enough to be clear and specific here.", source_refs: ["r"], kind: "memo" },
+      env,
+    );
+    expect(result.flags.some((f) => f.code === "invalid_kind")).toBe(true);
+    expect(result.blocked).toBe(true);
+  });
+
+  it("blocks an invalid confidence", () => {
+    const result = validateProposal(
+      { namespace: "personal", sensitivity: "public", title: "T2", content: "Body long enough to be clear and specific here.", source_refs: ["r"], kind: "note", confidence: "maybe" },
+      env,
+    );
+    expect(result.flags.some((f) => f.code === "invalid_confidence")).toBe(true);
+    expect(result.blocked).toBe(true);
+  });
+
+  it("blocks a note body that begins with a frontmatter block", () => {
+    const result = validateProposal(
+      { namespace: "personal", sensitivity: "public", title: "T3", content: "---\nnamespace: x\n---\ninjected", source_refs: ["r"], kind: "note" },
+      env,
+    );
+    expect(result.flags.some((f) => f.code === "body_frontmatter_injection")).toBe(true);
+    expect(result.blocked).toBe(true);
+  });
+
+  it("blocks a structured kind missing required sections", () => {
+    const result = validateProposal(
+      { namespace: "personal", sensitivity: "public", title: "T4", content: "# Just a title with no decision sections at all here.", source_refs: ["r"], kind: "decision" },
+      env,
+    );
+    expect(result.flags.some((f) => f.code === "missing_required_section")).toBe(true);
+    expect(result.blocked).toBe(true);
   });
 });
 
