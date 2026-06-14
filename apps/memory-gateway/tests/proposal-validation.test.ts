@@ -584,4 +584,30 @@ describe("validateProposal wired into createProposal", () => {
     const flags = proposal!.validationFlags as Array<{ code: string }>;
     expect(flags.some((f) => f.code === "invalid_tags")).toBe(true);
   });
+
+  it("renders hierarchical tags into approved note frontmatter without mangling '/'", async () => {
+    const { createProposal, reviewProposal } = await getModules(dir);
+    const created = await createProposal(
+      {
+        namespace: "personal",
+        sensitivity: "public",
+        title: "Hierarchical Tags Note",
+        content: "Body content that is comfortably longer than eighty characters so it counts as clear and specific.",
+        source_refs: ["ref-1"],
+        tags: ["db/postgres", "work"],
+      },
+      { client: "test" },
+    );
+    expect(created.review_state).toBe("pending_review");
+    const result = await reviewProposal(
+      created.proposal_id,
+      { action: "approve", reviewedBy: "tester" },
+      { client: "test" },
+    );
+    expect(result!.review_state).toBe("merged");
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const fileContent = readFileSync(join(dir, result!.document_path!), "utf8");
+    expect(fileContent).toContain("tags: [db/postgres, work]");
+  });
 });

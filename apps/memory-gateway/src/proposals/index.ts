@@ -408,6 +408,15 @@ function sanitizeYamlValue(value: string): string {
   return value.replace(/[^a-z0-9\-_]/g, "");
 }
 
+/**
+ * Tags are pre-validated by the note-schema (lowercase alnum plus . _ / -). Keep that
+ * charset; drop anything else as defense-in-depth. Unlike sanitizeYamlValue, this preserves
+ * '/' so hierarchical tags like `db/postgres` are not mangled.
+ */
+function sanitizeTag(value: string): string {
+  return value.replace(/[^a-z0-9._/-]/g, "");
+}
+
 function buildNoteFrontmatter(p: Proposal): string {
   const lines = [
     "---",
@@ -417,7 +426,7 @@ function buildNoteFrontmatter(p: Proposal): string {
     `status: active`,
     `confidence: ${sanitizeYamlValue(p.confidence)}`,
     `source_type: proposal`,
-    `tags: [${p.tags.map((t) => sanitizeYamlValue(t)).join(", ")}]`,
+    `tags: [${p.tags.map((t) => sanitizeTag(t)).join(", ")}]`,
     "---",
   ];
   return lines.join("\n");
