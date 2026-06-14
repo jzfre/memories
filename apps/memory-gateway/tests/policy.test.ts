@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { intersectScope } from "../src/policy/index";
+import { intersectScope, resolveScope } from "../src/policy/index";
 
 const allowedNs = ["personal", "work/client-a"];
 const allowedSe = ["public", "private"];
@@ -24,5 +24,16 @@ describe("intersectScope", () => {
   it("drops requested sensitivities outside the allowlist", () => {
     const s = intersectScope({ sensitivityAllowed: ["private", "secret-adjacent"] }, allowedNs, allowedSe);
     expect(s.sensitivities).toEqual(["private"]);
+  });
+});
+
+describe("resolveScope with explicit allow override", () => {
+  it("uses the provided allowlist instead of config when allow is given", () => {
+    const s = resolveScope(
+      { namespaces: ["a", "b"] },
+      { namespaces: ["a"], sensitivities: ["public"] },
+    );
+    expect(s.namespaces).toEqual(["a"]);
+    expect(s.sensitivities).toEqual(["public"]);
   });
 });
