@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { checksum, chunkId, chunkMarkdown, documentIdFromPath, parseNote } from "@memories/shared";
+import { checksum, chunkId, chunkMarkdown, documentIdFromPath, parseNote, validateNote } from "@memories/shared";
 import type { ValidationIssue, ParseStatus, ValidationStatus } from "@memories/shared";
 import { loadConfig } from "../config/index";
 import { prisma } from "../db/client";
@@ -28,7 +28,10 @@ function chunkEmbedText(title: string, headingPath: string | null, content: stri
   return [title, headingPath ?? "", content].filter(Boolean).join("\n");
 }
 
-function deriveValidation(warnings: string[]): {
+function deriveValidation(
+  warnings: string[],
+  schemaIssues: { code: string; message: string; severity: "block" | "flag" }[],
+): {
   parseStatus: ParseStatus;
   validationStatus: ValidationStatus;
   issues: ValidationIssue[];
@@ -46,7 +49,13 @@ function deriveValidation(warnings: string[]): {
     if (w.includes("missing 'namespace'")) issues.push({ code: "missing_namespace", message: w });
     if (w.includes("missing 'sensitivity'")) issues.push({ code: "missing_sensitivity", message: w });
   }
-  return { parseStatus: "parsed", validationStatus: issues.length ? "incomplete" : "valid", issues };
+  let hasBlock = false;
+  for (const si of schemaIssues) {
+    issues.push({ code: si.code as ValidationIssue["code"], message: si.message });
+    if (si.severity === "block") hasBlock = true;
+  }
+  const validationStatus: ValidationStatus = hasBlock ? "invalid" : issues.length ? "incomplete" : "valid";
+  return { parseStatus: "parsed", validationStatus, issues };
 }
 
 export async function scanVault(
@@ -69,7 +78,17 @@ export async function scanVault(
   for (const f of files) {
     const sum = checksum(f.content);
     const { frontmatter, title, body, warnings } = parseNote(f.content, f.relPath, defaults);
-    const validation = deriveValidation(warnings);
+    const schemaIssues = validateNote(
+      {
+        kind: frontmatter.kind,
+        confidence: frontmatter.confidence,
+        status: frontmatter.status,
+        tags: frontmatter.tags,
+      },
+      body,
+      config.note_rules?.severities,
+    );
+    const validation = deriveValidation(warnings, schemaIssues);
     const id = frontmatter.id ?? documentIdFromPath(f.relPath);
     seenIds.add(id);
     if (warnings.length) report.warnings.push({ path: f.relPath, messages: warnings });
