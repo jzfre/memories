@@ -78,16 +78,22 @@ export async function scanVault(
   for (const f of files) {
     const sum = checksum(f.content);
     const { frontmatter, title, body, warnings } = parseNote(f.content, f.relPath, defaults);
-    const schemaIssues = validateNote(
-      {
-        kind: frontmatter.kind,
-        confidence: frontmatter.confidence,
-        status: frontmatter.status,
-        tags: frontmatter.tags,
-      },
-      body,
-      config.note_rules?.severities,
-    );
+    // Skip note-schema validation when frontmatter failed to parse: `body` is the raw
+    // file there, so the result would be discarded by deriveValidation's parse-error
+    // branch anyway — don't waste work or expose the validator to garbage input.
+    const hasParseError = warnings.some((w) => w.startsWith("frontmatter parse error"));
+    const schemaIssues = hasParseError
+      ? []
+      : validateNote(
+          {
+            kind: frontmatter.kind,
+            confidence: frontmatter.confidence,
+            status: frontmatter.status,
+            tags: frontmatter.tags,
+          },
+          body,
+          config.note_rules?.severities,
+        );
     const validation = deriveValidation(warnings, schemaIssues);
     const id = frontmatter.id ?? documentIdFromPath(f.relPath);
     seenIds.add(id);
