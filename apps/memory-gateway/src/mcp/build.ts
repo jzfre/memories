@@ -78,6 +78,7 @@ export function buildMcpServer(): McpServer {
         content: z.string(),
         source_refs: z.array(z.string()).optional(),
         confidence: z.string().optional(),
+        tags: z.array(z.string()).optional(),
       },
     },
     async (args) => {

@@ -549,4 +549,39 @@ describe("validateProposal wired into createProposal", () => {
       ),
     ).rejects.toThrow();
   });
+
+  it("invalid kind via createProposal → rejected with invalid_kind flag", async () => {
+    const { createProposal } = await getModules(dir);
+    const result = await createProposal(
+      { namespace: "personal", sensitivity: "public", title: "Bad Kind Note", content: "Body long enough to be clear and specific here.", source_refs: ["ref-1"], kind: "memo" },
+      { client: "test" },
+    );
+    expect(result.review_state).toBe("rejected");
+    const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });
+    const flags = proposal!.validationFlags as Array<{ code: string }>;
+    expect(flags.some((f) => f.code === "invalid_kind")).toBe(true);
+  });
+
+  it("valid tags are persisted on the proposal row", async () => {
+    const { createProposal } = await getModules(dir);
+    const result = await createProposal(
+      { namespace: "personal", sensitivity: "public", title: "Tagged Note", content: "Body long enough to be clear and specific here.", source_refs: ["ref-1"], tags: ["db/postgres", "work"] },
+      { client: "test" },
+    );
+    const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });
+    expect(proposal!.tags).toEqual(["db/postgres", "work"]);
+    expect(result.review_state).toBe("pending_review");
+  });
+
+  it("invalid tags via createProposal → rejected with invalid_tags flag", async () => {
+    const { createProposal } = await getModules(dir);
+    const result = await createProposal(
+      { namespace: "personal", sensitivity: "public", title: "Bad Tag Note", content: "Body long enough to be clear and specific here.", source_refs: ["ref-1"], tags: ["Has Space"] },
+      { client: "test" },
+    );
+    expect(result.review_state).toBe("rejected");
+    const proposal = await prisma.proposal.findUnique({ where: { id: result.proposal_id } });
+    const flags = proposal!.validationFlags as Array<{ code: string }>;
+    expect(flags.some((f) => f.code === "invalid_tags")).toBe(true);
+  });
 });

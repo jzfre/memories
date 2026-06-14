@@ -64,6 +64,7 @@ export interface ProposeNoteInput {
   content: string;
   source_refs?: string[];
   confidence?: string;
+  tags?: string[];
 }
 
 export interface ProposePatchInput {
@@ -89,7 +90,7 @@ function isPatch(input: CreateProposalInput): input is ProposePatchInput {
 
 export async function createProposal(
   input: CreateProposalInput,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
 ): Promise<CreateProposalResult> {
   const config = loadConfig();
   const { policy, actor } = config;
@@ -106,6 +107,7 @@ export async function createProposal(
   let targetDocumentId: string | undefined;
   let sourceRefs: string[];
   let confidence: string;
+  let tags: string[];
 
   if (isPatchProposal) {
     // For patches, we need to look up the target document
@@ -165,6 +167,7 @@ export async function createProposal(
     targetDocumentId = input.target_document_id;
     sourceRefs = input.source_refs ?? [];
     confidence = input.confidence ?? "unknown";
+    tags = [];
 
     // Frontmatter injection guard: patch content must not begin with a --- block
     const trimmedContent = input.content.trimStart();
@@ -229,6 +232,7 @@ export async function createProposal(
     targetDocumentId = undefined;
     sourceRefs = input.source_refs ?? [];
     confidence = input.confidence ?? "unknown";
+    tags = input.tags ?? [];
   }
 
   // Gather existing titles for duplicate detection:
@@ -250,12 +254,25 @@ export async function createProposal(
   ];
 
   // Run pure validation
+  const allowedNamespaces = ctx.scope?.namespaces ?? policy.allowed_namespaces;
+  const allowedSensitivities = ctx.scope?.sensitivities ?? policy.allowed_sensitivity;
   const validation = validateProposal(
-    { namespace, sensitivity, title, content: proposedContent, source_refs: sourceRefs, kind },
     {
-      allowedNamespaces: policy.allowed_namespaces,
-      allowedSensitivities: policy.allowed_sensitivity,
+      namespace,
+      sensitivity,
+      title,
+      content: proposedContent,
+      source_refs: sourceRefs,
+      kind,
+      confidence,
+      status: "active",
+      tags,
+    },
+    {
+      allowedNamespaces,
+      allowedSensitivities,
       existingTitles,
+      severityOverrides: config.note_rules?.severities,
     },
   );
 
@@ -306,6 +323,7 @@ export async function createProposal(
       targetDocumentId: targetDocumentId ?? null,
       sourceRefs,
       confidence,
+      tags,
       reviewState,
       reviewerNotes: reviewerNotes ?? null,
       createdBy: actor,
@@ -399,7 +417,7 @@ function buildNoteFrontmatter(p: Proposal): string {
     `status: active`,
     `confidence: ${sanitizeYamlValue(p.confidence)}`,
     `source_type: proposal`,
-    `tags: []`,
+    `tags: [${p.tags.map((t) => sanitizeYamlValue(t)).join(", ")}]`,
     "---",
   ];
   return lines.join("\n");
