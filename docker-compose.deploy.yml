@@ -1,0 +1,53 @@
+# 24/7 deployment of the memories MCP gateway (HTTP transport) + its own Postgres.
+# Usage (from repo root, with a .env providing MCP_HTTP_TOKEN):
+#   docker compose -f docker-compose.deploy.yml up -d --build
+#
+# The gateway port is published to the host LOOPBACK only (127.0.0.1:8788); a
+# Cloudflare tunnel / Tailscale on the host fronts it. Postgres is never published.
+services:
+  memories-db:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    container_name: memories-db
+    environment:
+      POSTGRES_USER: memories
+      POSTGRES_PASSWORD: ${MEMORIES_DB_PASSWORD:-memories}
+      POSTGRES_DB: memories
+    volumes:
+      - memories_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memories -d memories"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/memory-gateway/Dockerfile
+    container_name: memories-gateway
+    depends_on:
+      memories-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://memories:${MEMORIES_DB_PASSWORD:-memories}@memories-db:5432/memories
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_HTTP_PORT: "8788"
+      MCP_HTTP_TOKEN: ${MCP_HTTP_TOKEN:?set MCP_HTTP_TOKEN in .env}
+      MCP_HTTP_PUBLIC_BASE_URL: ${MCP_HTTP_PUBLIC_BASE_URL:-}
+      VAULT_ROOT: /vault
+      EMBEDDINGS_ENABLED: ${EMBEDDINGS_ENABLED:-false}
+      EMBEDDINGS_URL: ${EMBEDDINGS_URL:-}
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-}
+      EMBEDDINGS_DIM: ${EMBEDDINGS_DIM:-768}
+    volumes:
+      # Mount the vault read-only for the smoke test (dev-vault). For real use, point
+      # VAULT_HOST_PATH at the synced vault and switch to read-write so approvals can write.
+      - ${VAULT_HOST_PATH:-./dev-vault}:/vault:ro
+    ports:
+      - "127.0.0.1:8788:8788"
+    restart: unless-stopped
+
+volumes:
+  memories_pgdata:

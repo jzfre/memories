@@ -70,7 +70,10 @@ export function start(port: number = DEFAULT_PORT): Promise<Server> {
       if (!res.headersSent) send(res, 500, { error: "internal error", detail: (err as Error).message });
     }
   });
-  return new Promise((resolveListen) => httpServer.listen(port, "127.0.0.1", () => resolveListen(httpServer)));
+  // Default to loopback; set MCP_HTTP_HOST=0.0.0.0 inside a container (Docker publishes the
+  // port to the host's 127.0.0.1) or to a Tailscale IP for private cross-device access.
+  const host = process.env.MCP_HTTP_HOST ?? "127.0.0.1";
+  return new Promise((resolveListen) => httpServer.listen(port, host, () => resolveListen(httpServer)));
 }
 
 // Entry point when run directly (tsx src/mcp/http.ts)
