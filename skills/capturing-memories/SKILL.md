@@ -7,7 +7,12 @@ description: Use when the user asks to remember, save, store, or capture knowled
 
 ## Overview
 
-The memories gateway accepts **proposals, not writes**, and now **rejects** proposals
+**Canonical protocol: the vault note `99-meta/PROTOCOL.md`** — served to every MCP
+client as server instructions at connect, and re-readable mid-session via the
+`memory_protocol` tool. When connected to the gateway, prefer that (it may be newer);
+this skill is the local summary of the same rules.
+
+The memories gateway accepts **proposals, not writes**, and **rejects** proposals
 whose metadata or body break the rules below. Invalid values are not stored — they come
 back rejected. **A clear claim is not knowledge of its metadata or shape: ask, don't guess.**
 

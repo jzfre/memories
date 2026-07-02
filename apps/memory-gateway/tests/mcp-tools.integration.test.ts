@@ -58,7 +58,7 @@ afterAll(async () => {
 });
 
 describe("MCP server / tool registry", () => {
-  it("exposes exactly the ten tools, each with a description and input schema, incl. memory_review_proposal", async () => {
+  it("exposes exactly the eleven tools, each with a description and input schema, incl. memory_review_proposal", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
@@ -69,6 +69,7 @@ describe("MCP server / tool registry", () => {
       "memory_list_proposals",
       "memory_propose_note",
       "memory_propose_patch",
+      "memory_protocol",
       "memory_recent",
       "memory_review_proposal",
       "memory_search",
