@@ -58,7 +58,7 @@ afterAll(async () => {
 });
 
 describe("MCP server / tool registry", () => {
-  it("exposes exactly the seven read tools, each with a description and input schema", async () => {
+  it("exposes exactly the nine tools (seven read + two direct-write), each with a description and input schema", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
@@ -69,6 +69,8 @@ describe("MCP server / tool registry", () => {
       "memory_protocol",
       "memory_recent",
       "memory_search",
+      "memory_update_note",
+      "memory_write_note",
     ]);
     // The propose/approve pipeline is gone under the peer-work model.
     expect(names).not.toContain("memory_propose_note");

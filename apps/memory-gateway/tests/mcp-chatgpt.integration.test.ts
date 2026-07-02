@@ -34,6 +34,24 @@ describe("chatgpt profile tool registry", () => {
     expect(names).not.toContain("memory_propose_note");
     expect(names).not.toContain("memory_review_proposal");
   });
+
+  it("exposes the nine peer-work tools plus search + fetch (eleven total), including memory_write_note", async () => {
+    const names = (await client.listTools()).tools.map((t) => t.name).sort();
+    expect(names).toEqual([
+      "fetch",
+      "health_status",
+      "memory_context_pack",
+      "memory_explain_sources",
+      "memory_fetch",
+      "memory_protocol",
+      "memory_recent",
+      "memory_search",
+      "memory_update_note",
+      "memory_write_note",
+      "search",
+    ]);
+    expect(names).toContain("memory_write_note");
+  });
 });
 
 describe("chatgpt search/fetch response shape", () => {
