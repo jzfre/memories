@@ -2,21 +2,21 @@ vault:
   root: /vault
 policy:
   default_namespace: personal
-  default_sensitivity: private
+  default_sensitivity: internal
   allowed_namespaces: [personal, career, brain-gym, home, public-research, testing]
-  allowed_sensitivity: [public, internal, private]
+  allowed_sensitivity: [public, internal]
 actor: jr
 connectors:
   claude-code:
     transport: stdio
     auth: none
-    capabilities: [read, propose, review]
+    capabilities: [read, write]
     scope: { namespaces: "*", sensitivities: "*" }
   chatgpt:
     transport: http
     auth: token
-    capabilities: [read, propose]
-    scope: { namespaces: "*", sensitivities: [public, internal] }
+    capabilities: [read, write]     # peer model — AI writes directly; owner reviews by editing
+    scope: { namespaces: "*", sensitivities: "*" }   # every client sees everything (owner decision)
     public_base_url: "https://mcp.aqui.technology"
 note_rules:
   quarantine_invalid: false

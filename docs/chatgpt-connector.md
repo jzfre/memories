@@ -1,9 +1,9 @@
-# Connecting ChatGPT to your memories (read + propose)
+# Connecting ChatGPT to your memories (read + write)
 
 ChatGPT runs in OpenAI's cloud, so it can only reach a **public HTTPS** MCP endpoint.
-This guide exposes the gateway's HTTP MCP transport via a tunnel. Reads (incl. `private`
-notes, per config) are sent to OpenAI; writes are limited to *proposals* (no approval tool
-is exposed — approval stays terminal-only).
+This guide exposes the gateway's HTTP MCP transport via a tunnel. **Peer model:** ChatGPT
+reads everything and writes notes directly into the vault; the owner reviews by editing
+(changes are versioned server-side).
 
 ## Prerequisites
 
@@ -24,40 +24,37 @@ pnpm --filter @memories/memory-gateway mcp:http
 # listening on 127.0.0.1:8788, path: /<MCP_HTTP_TOKEN>/mcp
 ```
 
-## 3. Tunnel it (ngrok)
+## 3. Tunnel it
 
-```bash
-ngrok http 8788
-```
+Cloudflare named tunnel (stable hostname, recommended) or `ngrok http 8788` for a quick
+test. Your connector URL is: `https://<public-host>/<MCP_HTTP_TOKEN>/mcp`.
 
-Copy the public URL, e.g. `https://abcd-12-34.ngrok-free.app`.
-Your connector URL is: `https://abcd-12-34.ngrok-free.app/<MCP_HTTP_TOKEN>/mcp`.
-
-> Free ngrok URLs change on restart — you'll re-paste the URL each session. A paid ngrok
-> static domain or a Cloudflare Tunnel gives a stable URL. Keep the tunnel **off when not
-> in use**; the token in the URL is a credential.
+> The token in the URL is a credential — treat the whole URL as a secret.
 
 ## 4. Add the connector in ChatGPT
 
 Settings → Apps & Connectors → Advanced → **Developer mode** → add a connector with the
 URL from step 3, **auth = none** (the token is in the URL). Enable its tools per
-conversation. ChatGPT will see `search`, `fetch`, `memory_propose_note`,
-`memory_propose_patch`, `memory_list_proposals`, plus read tools — but **not** an approve
-tool.
+conversation. ChatGPT sees the read tools (`search`, `fetch`, `memory_search`,
+`memory_fetch`, `memory_recent`, `memory_context_pack`, `memory_explain_sources`,
+`memory_protocol`, `health_status`) plus the write tools `memory_write_note` and
+`memory_update_note`.
 
-## 5. Approving what ChatGPT proposes
+## 5. How writes work
 
-Proposals queue exactly like Claude Code's. Approve from your terminal:
-`pnpm --filter @memories/memory-gateway proposals` (read the code) then
-`pnpm --filter @memories/memory-gateway proposals review <id> --approve`.
+`memory_write_note` creates a real `.md` file in the vault immediately (default folder
+`00-inbox/`); `memory_update_note` replaces a note's body. There is no approval step —
+review by editing the note in Obsidian/SilverBullet. The only refusals: content that
+looks like credentials, and bodies that start with `---`. The working rules live in the
+vault note `99-meta/PROTOCOL.md`, which every MCP client receives at connect.
 
 ## Security notes
 
 - Token in URL = capability auth (MVP). The OAuth 2.1 flow is the recommended hardening
   before leaving the endpoint always-on.
-- Scope: `connectors.chatgpt.scope` controls what ChatGPT can read. Default is all
-  namespaces + all sensitivities (incl. `private`). Narrow it in `config.yaml` to reduce
-  egress.
-- The endpoint binds to `127.0.0.1` and is only reachable through the tunnel you start;
-  every request is token-gated (constant-time check) before any MCP/DB work.
-```
+- The connector sees and writes **everything** (`public` + `internal`) — the owner's
+  explicit choice. Narrow `connectors.chatgpt.scope` in `config.yaml` to reduce egress
+  if that ever changes.
+- The endpoint binds to `127.0.0.1` and is only reachable through the tunnel; every
+  request is token-gated (constant-time check) before any MCP/DB work. Server-side
+  file versioning (Syncthing `.stversions`) keeps history of every AI write.

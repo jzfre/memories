@@ -3,9 +3,9 @@ vault:
 
 policy:
   default_namespace: personal
-  default_sensitivity: private
+  default_sensitivity: internal
   allowed_namespaces: [personal, career, brain-gym, home, public-research, testing]
-  allowed_sensitivity: [public, internal, private]
+  allowed_sensitivity: [public, internal]
 
 actor: jr
 
@@ -13,15 +13,15 @@ connectors:
   claude-code:
     transport: stdio
     auth: none
-    capabilities: [read, propose, review]
+    capabilities: [read, write]
     scope: { namespaces: "*", sensitivities: "*" }
   chatgpt:
     transport: http
     auth: token
-    capabilities: [read, propose]   # no 'review' — approval stays terminal-only
-    scope: { namespaces: "*", sensitivities: "*" }   # all namespaces + sensitivities (incl. private — see spec D5)
+    capabilities: [read, write]     # peer model — AI writes directly; owner reviews by editing
+    scope: { namespaces: "*", sensitivities: "*" }   # every client sees everything (owner decision)
     public_base_url: ""             # set to your tunnel URL prefix, e.g. https://<host>/<MCP_HTTP_TOKEN>
 
 note_rules:
   quarantine_invalid: false
-  severities: {}                    # e.g. { missing_required_section: flag } to relax structured-kind enforcement
+  severities: {}                    # informational flags only; nothing blocks except secrets + body-frontmatter guards
