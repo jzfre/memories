@@ -24,8 +24,9 @@ describe("quarantine_invalid", () => {
     await resetDb();
     dir = mkdtempSync(join(tmpdir(), "memquar-"));
     mkdirSync(join(dir, "personal"), { recursive: true });
-    // An invalid structured note (missing sections) that still matches the query.
-    writeFileSync(join(dir, "personal", "half.md"), `---\nnamespace: personal\nsensitivity: private\nkind: decision\n---\n# Half\n\n## Claim\n\nzimbabwe keyword only`);
+    // A genuinely invalid note (malformed frontmatter -> parse error, always "invalid"
+    // regardless of note_rules severity config) that still matches the query.
+    writeFileSync(join(dir, "personal", "half.md"), `---\na: b: c\n---\n# Half\n\nzimbabwe keyword only`);
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });

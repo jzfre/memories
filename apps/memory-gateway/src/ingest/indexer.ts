@@ -87,8 +87,6 @@ export async function scanVault(
       : validateNote(
           {
             kind: frontmatter.kind,
-            confidence: frontmatter.confidence,
-            status: frontmatter.status,
             tags: frontmatter.tags,
           },
           body,

@@ -5,7 +5,7 @@ export interface ResolvedProfile {
   clientLabel: string;
   transport: "stdio" | "http";
   auth: "none" | "token" | "oauth";
-  capabilities: { read: boolean; propose: boolean; review: boolean };
+  capabilities: { read: boolean; write: boolean };
   scope: { namespaces: string[]; sensitivities: string[] };
   publicBaseUrl?: string;
 }
@@ -27,7 +27,7 @@ export function resolveProfile(name: string): ResolvedProfile {
       clientLabel: labelFor(name),
       transport: "stdio",
       auth: "none",
-      capabilities: { read: true, propose: true, review: true },
+      capabilities: { read: true, write: true },
       scope: { namespaces: allowNs, sensitivities: allowSe },
     };
   }
@@ -42,8 +42,7 @@ export function resolveProfile(name: string): ResolvedProfile {
     auth: raw.auth,
     capabilities: {
       read: raw.capabilities.includes("read"),
-      propose: raw.capabilities.includes("propose"),
-      review: raw.capabilities.includes("review"),
+      write: raw.capabilities.includes("write"),
     },
     scope: { namespaces: ns, sensitivities: se },
     // Env var overrides the per-connector config value (used for ChatGPT citation URLs).

@@ -1,14 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { scanVault, embedPending, rebuildIndex, type ScanReport } from "../ingest/indexer";
 import { computeIndexStatus, type IndexStatus } from "../status/index";
-import {
-  listProposals,
-  reviewProposal,
-  type Proposal,
-  type ReviewResult,
-} from "../proposals/index";
 import { searchAudit, type AuditSearchFilter, type AuditRow } from "../audit/search";
-import { loadConfig } from "../config/index";
 
 export async function runScan(opts: { dryRun: boolean }): Promise<ScanReport> {
   return scanVault({ ...opts, client: "cli" });
@@ -20,23 +13,6 @@ export async function runStatus(): Promise<IndexStatus> {
 
 export async function runRebuild(): Promise<ScanReport> {
   return rebuildIndex({ client: "cli" });
-}
-
-export async function runListProposals(filter: {
-  reviewState?: string;
-  namespace?: string;
-}): Promise<Proposal[]> {
-  return listProposals(filter, { client: "cli" });
-}
-
-export async function runReviewProposal(
-  id: string,
-  action: "approve" | "reject" | "needs_more_evidence",
-  notes?: string,
-): Promise<ReviewResult | null> {
-  const config = loadConfig();
-  const reviewedBy = config.actor;
-  return reviewProposal(id, { action, reviewerNotes: notes, reviewedBy }, { client: "cli" });
 }
 
 export async function runAuditSearch(filter: AuditSearchFilter): Promise<AuditRow[]> {
@@ -70,27 +46,6 @@ function printAuditTable(rows: AuditRow[]): void {
         r.client.padEnd(15),
         String(r.approved ?? "null").padEnd(9),
         r.namespace,
-      ].join("  "),
-    );
-  }
-}
-
-function printProposalsTable(proposals: Proposal[]): void {
-  if (proposals.length === 0) {
-    console.log("(no proposals)");
-    return;
-  }
-  const header = ["id".padEnd(36), "state".padEnd(22), "code".padEnd(7), "namespace".padEnd(20), "title"].join("  ");
-  console.log(header);
-  console.log("-".repeat(header.length + 6));
-  for (const p of proposals) {
-    console.log(
-      [
-        p.id.padEnd(36),
-        p.reviewState.padEnd(22),
-        (p.approvalCode ?? "").padEnd(7),
-        p.namespace.padEnd(20),
-        p.title,
       ].join("  "),
     );
   }
@@ -140,48 +95,6 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(report, null, 2));
     process.exit(0);
   }
-  if (cmd === "proposals") {
-    const sub = args[1];
-    if (sub === "review") {
-      // proposals review <id> --approve|--reject|--needs-evidence [--notes "…"]
-      const id = args[2];
-      if (!id) {
-        console.error("Error: proposal id required");
-        process.exit(1);
-      }
-      const hasApprove = args.includes("--approve");
-      const hasReject = args.includes("--reject");
-      const hasNeeds = args.includes("--needs-evidence");
-      const actionCount = [hasApprove, hasReject, hasNeeds].filter(Boolean).length;
-      if (actionCount !== 1) {
-        console.error("Error: exactly one of --approve, --reject, --needs-evidence is required");
-        process.exit(1);
-      }
-      const action: "approve" | "reject" | "needs_more_evidence" = hasApprove
-        ? "approve"
-        : hasReject
-          ? "reject"
-          : "needs_more_evidence";
-
-      const notesIdx = args.indexOf("--notes");
-      const notes = notesIdx !== -1 ? args[notesIdx + 1] : undefined;
-
-      const result = await runReviewProposal(id, action, notes);
-      if (!result) {
-        console.error(`Error: proposal "${id}" not found`);
-        process.exit(1);
-      }
-      console.log(JSON.stringify(result, null, 2));
-      process.exit(0);
-    }
-
-    // proposals [--state <state>]
-    const stateIdx = args.indexOf("--state");
-    const stateFilter = stateIdx !== -1 ? args[stateIdx + 1] : undefined;
-    const proposals = await runListProposals({ reviewState: stateFilter });
-    printProposalsTable(proposals);
-    process.exit(0);
-  }
   if (cmd === "audit") {
     const actionIdx = args.indexOf("--action");
     const actionFilter = actionIdx !== -1 ? args[actionIdx + 1] : undefined;
@@ -205,7 +118,7 @@ async function main(): Promise<void> {
     printAuditTable(rows);
     process.exit(0);
   }
-  console.error("Usage: memories <scan [--dry-run] | reembed | rebuild | status | proposals [--state <s>] | proposals review <id> --approve|--reject|--needs-evidence [--notes \"…\"] | audit [--action x] [--client y] [--approved true|false] [--limit n]>");
+  console.error("Usage: memories <scan [--dry-run] | reembed | rebuild | status | audit [--action x] [--client y] [--approved true|false] [--limit n]>");
   process.exit(1);
 }
 

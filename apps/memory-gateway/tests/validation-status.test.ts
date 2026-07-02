@@ -50,11 +50,11 @@ describe("validation status", () => {
     expect(d.validationStatus).toBe("invalid");
   });
 
-  it("flags a structured note missing required sections as invalid with missing_required_section", async () => {
+  it("flags a structured note missing required sections as incomplete with missing_required_section (flag, not block, by default)", async () => {
     const scanVault = await scanFor(dir);
     await scanVault();
     const d = await prisma.document.findFirstOrThrow({ where: { path: "personal/halfdecision.md" } });
-    expect(d.validationStatus).toBe("invalid");
+    expect(d.validationStatus).toBe("incomplete");
     const codes = (d.validationIssues as { code: string }[]).map((i) => i.code);
     expect(codes).toContain("missing_required_section");
   });

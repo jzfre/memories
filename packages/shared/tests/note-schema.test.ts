@@ -9,34 +9,29 @@ import {
   BODY_TEMPLATES,
 } from "../src/note-schema";
 
-const okFields = { kind: "note", confidence: "high", status: "active", tags: ["work", "db/postgres"] };
+const okFields = { kind: "note", tags: ["work", "db/postgres"] };
 
 describe("validateNoteFields", () => {
   it("accepts valid fields with no issues", () => {
     expect(validateNoteFields(okFields)).toEqual([]);
   });
 
-  it("blocks an unknown kind", () => {
+  it("flags an unknown kind", () => {
     const issues = validateNoteFields({ ...okFields, kind: "memo" });
     expect(issues.map((i) => i.code)).toContain("invalid_kind");
-    expect(issues.find((i) => i.code === "invalid_kind")!.severity).toBe("block");
+    expect(issues.find((i) => i.code === "invalid_kind")!.severity).toBe("flag");
   });
 
-  it("blocks an unknown confidence and status", () => {
-    const issues = validateNoteFields({ ...okFields, confidence: "maybe", status: "open" });
-    expect(issues.map((i) => i.code).sort()).toEqual(["invalid_confidence", "invalid_status"]);
-  });
-
-  it("blocks malformed tags (spaces, '#', uppercase)", () => {
+  it("flags malformed tags (spaces, '#', uppercase)", () => {
     const issues = validateNoteFields({ ...okFields, tags: ["Has Space", "#hash", "ok"] });
     const tagIssue = issues.find((i) => i.code === "invalid_tags")!;
-    expect(tagIssue.severity).toBe("block");
+    expect(tagIssue.severity).toBe("flag");
     expect(tagIssue.message).toContain("Has Space");
   });
 
-  it("honors a severity override (block -> flag)", () => {
-    const issues = validateNoteFields({ ...okFields, kind: "memo" }, { invalid_kind: "flag" });
-    expect(issues.find((i) => i.code === "invalid_kind")!.severity).toBe("flag");
+  it("honors a severity override (flag -> block)", () => {
+    const issues = validateNoteFields({ ...okFields, kind: "memo" }, { invalid_kind: "block" });
+    expect(issues.find((i) => i.code === "invalid_kind")!.severity).toBe("block");
   });
 });
 
@@ -61,10 +56,10 @@ describe("validateNoteBody", () => {
     expect(validateNoteBody("see [[open", "note").map((i) => i.code)).toContain("body_malformed_wikilink");
   });
 
-  it("blocks a structured kind missing required sections", () => {
+  it("flags a structured kind missing required sections", () => {
     const issues = validateNoteBody("# Title\n\n## Claim\n\nx", "decision");
     const miss = issues.find((i) => i.code === "missing_required_section")!;
-    expect(miss.severity).toBe("block");
+    expect(miss.severity).toBe("flag");
     expect(miss.message).toContain("Evidence");
   });
 
@@ -76,7 +71,7 @@ describe("validateNoteBody", () => {
     expect(validateNoteBody(body, "decision")).toEqual([]);
   });
 
-  it("blocks a finding missing required sections (multi-word section names)", () => {
+  it("flags a finding missing required sections (multi-word section names)", () => {
     const issues = validateNoteBody("## Finding\nstuff", "finding");
     const miss = issues.find((i) => i.code === "missing_required_section")!;
     expect(miss.message).toContain("Source references");

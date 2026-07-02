@@ -27,11 +27,11 @@ beforeAll(async () => {
 afterAll(async () => { await client.close(); });
 
 describe("chatgpt profile tool registry", () => {
-  it("registers search + fetch and propose tools, but NOT memory_review_proposal", async () => {
+  it("registers search + fetch, but NOT memory_propose_note / memory_review_proposal", async () => {
     const names = (await client.listTools()).tools.map((t) => t.name);
     expect(names).toContain("search");
     expect(names).toContain("fetch");
-    expect(names).toContain("memory_propose_note");
+    expect(names).not.toContain("memory_propose_note");
     expect(names).not.toContain("memory_review_proposal");
   });
 });

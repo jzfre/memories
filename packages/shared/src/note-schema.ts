@@ -1,5 +1,3 @@
-import { CONFIDENCE_VALUES, STATUS_VALUES } from "./types";
-
 /** Canonical note kinds. Single source of truth (was duplicated in validate.ts + the skill). */
 export const KIND_VALUES = [
   "note",
@@ -40,14 +38,14 @@ export interface NoteIssue {
 }
 export type SeverityOverrides = Record<string, IssueSeverity>;
 
-/** Default severity per issue code. `block` => reject at proposal-time. */
+/** Default severity per issue code. `block` is reserved for structural guards
+ * (body_frontmatter_injection); everything else defaults to a non-blocking flag
+ * under the peer-work model, where the owner reviews by editing rather than approving. */
 export const DEFAULT_SEVERITY: Record<string, IssueSeverity> = {
-  invalid_kind: "block",
-  invalid_confidence: "block",
-  invalid_status: "block",
-  invalid_tags: "block",
+  invalid_kind: "flag",
+  invalid_tags: "flag",
   body_frontmatter_injection: "block",
-  missing_required_section: "block",
+  missing_required_section: "flag",
   body_raw_html: "flag",
   body_malformed_wikilink: "flag",
 };
@@ -58,8 +56,6 @@ function sev(code: string, overrides?: SeverityOverrides): IssueSeverity {
 
 export interface NoteFields {
   kind: string;
-  confidence: string;
-  status: string;
   tags: string[];
 }
 
@@ -70,12 +66,6 @@ export function validateNoteFields(fields: NoteFields, overrides?: SeverityOverr
   const issues: NoteIssue[] = [];
   if (!(KIND_VALUES as readonly string[]).includes(fields.kind)) {
     issues.push({ code: "invalid_kind", message: `kind "${fields.kind}" is not one of: ${KIND_VALUES.join(", ")}.`, severity: sev("invalid_kind", overrides) });
-  }
-  if (!(CONFIDENCE_VALUES as readonly string[]).includes(fields.confidence)) {
-    issues.push({ code: "invalid_confidence", message: `confidence "${fields.confidence}" is not one of: ${CONFIDENCE_VALUES.join(", ")}.`, severity: sev("invalid_confidence", overrides) });
-  }
-  if (!(STATUS_VALUES as readonly string[]).includes(fields.status)) {
-    issues.push({ code: "invalid_status", message: `status "${fields.status}" is not one of: ${STATUS_VALUES.join(", ")}.`, severity: sev("invalid_status", overrides) });
   }
   const badTags = fields.tags.filter((t) => !TAG_RE.test(t));
   if (badTags.length > 0) {

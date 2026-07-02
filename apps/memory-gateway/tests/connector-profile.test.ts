@@ -18,16 +18,16 @@ describe("resolveProfile", () => {
     const { resolveProfile } = await import("../src/connectors/profile");
     const p = resolveProfile("claude-code");
     expect(p.transport).toBe("stdio");
-    expect(p.capabilities).toEqual({ read: true, propose: true, review: true });
+    expect(p.capabilities).toEqual({ read: true, write: true });
     expect(p.clientLabel).toBe("mcp");
     expect(p.scope.namespaces.length).toBeGreaterThan(0);
   });
 
-  it("resolves a chatgpt http profile: no review, scope '*' expands to config allowlist", async () => {
+  it("resolves a chatgpt http profile: scope '*' expands to config allowlist", async () => {
     const { resolveProfile } = await load();
     const p = resolveProfile("chatgpt");
     expect(p.transport).toBe("http");
-    expect(p.capabilities).toEqual({ read: true, propose: true, review: false });
+    expect(p.capabilities).toEqual({ read: true, write: true });
     expect(p.clientLabel).toBe("mcp:chatgpt");
     expect(p.scope.namespaces).toEqual(["personal", "work/client-a"]);
     expect(p.scope.sensitivities).toEqual(["public", "internal", "private", "client-confidential"]);

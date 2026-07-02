@@ -1,12 +1,4 @@
-export const SENSITIVITY_VALUES = [
-  "public",
-  "internal",
-  "private",
-  "confidential",
-  "client-confidential",
-  "secret-adjacent",
-  "restricted",
-] as const;
+export const SENSITIVITY_VALUES = ["public", "internal"] as const;
 export type Sensitivity = (typeof SENSITIVITY_VALUES)[number];
 
 export const CONFIDENCE_VALUES = ["confirmed", "high", "medium", "low", "unknown"] as const;
@@ -45,8 +37,6 @@ export const VALIDATION_CODE_VALUES = [
   "missing_sensitivity",
   "frontmatter_parse_error",
   "invalid_kind",
-  "invalid_confidence",
-  "invalid_status",
   "invalid_tags",
   "body_frontmatter_injection",
   "body_raw_html",

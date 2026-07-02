@@ -8,7 +8,7 @@ const ScopeSchema = z.object({
 const ConnectorSchema = z.object({
   transport: z.enum(["stdio", "http"]),
   auth: z.enum(["none", "token", "oauth"]).default("none"),
-  capabilities: z.array(z.enum(["read", "propose", "review"])).default(["read"]),
+  capabilities: z.array(z.enum(["read", "write"])).default(["read"]),
   scope: ScopeSchema.default({ namespaces: "*", sensitivities: "*" }),
   public_base_url: z.string().optional(),
 });

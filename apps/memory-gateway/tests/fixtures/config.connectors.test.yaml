@@ -10,7 +10,7 @@ connectors:
   chatgpt:
     transport: http
     auth: token
-    capabilities: [read, propose]
+    capabilities: [read, write]
     scope: { namespaces: "*", sensitivities: "*" }
     public_base_url: https://example/mcp
   narrow:

@@ -21,14 +21,14 @@ describe("ConfigSchema connectors + note_rules", () => {
         chatgpt: {
           transport: "http",
           auth: "token",
-          capabilities: ["read", "propose"],
+          capabilities: ["read", "write"],
           scope: { namespaces: "*", sensitivities: "*" },
           public_base_url: "https://x/y/mcp",
         },
       },
     });
     expect(c.connectors.chatgpt.transport).toBe("http");
-    expect(c.connectors.chatgpt.capabilities).toEqual(["read", "propose"]);
+    expect(c.connectors.chatgpt.capabilities).toEqual(["read", "write"]);
     expect(c.connectors.chatgpt.scope.namespaces).toBe("*");
   });
 
