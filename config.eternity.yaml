@@ -1,0 +1,23 @@
+vault:
+  root: /vault
+policy:
+  default_namespace: personal
+  default_sensitivity: private
+  allowed_namespaces: [personal, career, brain-gym, home, public-research, testing]
+  allowed_sensitivity: [public, internal, private]
+actor: jr
+connectors:
+  claude-code:
+    transport: stdio
+    auth: none
+    capabilities: [read, propose, review]
+    scope: { namespaces: "*", sensitivities: "*" }
+  chatgpt:
+    transport: http
+    auth: token
+    capabilities: [read, propose]
+    scope: { namespaces: "*", sensitivities: [public, internal] }
+    public_base_url: "https://mcp.aqui.technology"
+note_rules:
+  quarantine_invalid: false
+  severities: {}
