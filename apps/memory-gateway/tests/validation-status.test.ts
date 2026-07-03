@@ -21,6 +21,7 @@ describe("validation status", () => {
     writeFileSync(join(dir, "personal", "clean.md"), `---\nnamespace: personal\nsensitivity: private\n---\n# Clean\n\nbody`);
     writeFileSync(join(dir, "personal", "nometa.md"), `# No metadata\n\njust text`);
     writeFileSync(join(dir, "personal", "bad.md"), `---\na: b: c\n---\n# Bad\n\nbody`);
+    writeFileSync(join(dir, "personal", "halfdecision.md"), `---\nnamespace: personal\nsensitivity: private\nkind: decision\n---\n# Half\n\n## Claim\n\nonly a claim`);
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -47,6 +48,15 @@ describe("validation status", () => {
     const d = await prisma.document.findFirstOrThrow({ where: { path: "personal/bad.md" } });
     expect(d.parseStatus).toBe("error");
     expect(d.validationStatus).toBe("invalid");
+  });
+
+  it("flags a structured note missing required sections as incomplete with missing_required_section (flag, not block, by default)", async () => {
+    const scanVault = await scanFor(dir);
+    await scanVault();
+    const d = await prisma.document.findFirstOrThrow({ where: { path: "personal/halfdecision.md" } });
+    expect(d.validationStatus).toBe("incomplete");
+    const codes = (d.validationIssues as { code: string }[]).map((i) => i.code);
+    expect(codes).toContain("missing_required_section");
   });
 
   it("counts incomplete/invalid in the scan report", async () => {

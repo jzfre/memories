@@ -25,7 +25,7 @@ async function connectClient() {
 describe("MCP server", () => {
   beforeEach(resetDb);
 
-  it("exposes the ten tools", async () => {
+  it("exposes the nine tools", async () => {
     const client = await connectClient();
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
@@ -34,12 +34,11 @@ describe("MCP server", () => {
       "memory_context_pack",
       "memory_explain_sources",
       "memory_fetch",
-      "memory_list_proposals",
-      "memory_propose_note",
-      "memory_propose_patch",
+      "memory_protocol",
       "memory_recent",
-      "memory_review_proposal",
       "memory_search",
+      "memory_update_note",
+      "memory_write_note",
     ]);
     await client.close();
   });

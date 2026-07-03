@@ -20,17 +20,18 @@ export interface FetchedDocument {
 
 export async function fetchDocument(
   documentId: string,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
 ): Promise<FetchedDocument | null> {
-  const { actor } = loadConfig();
-  const scope = resolveScope({});
+  const { actor, note_rules } = loadConfig();
+  const scope = resolveScope({}, ctx.scope);
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
 
   const allowed =
     !!doc &&
     scope.namespaces.includes(doc.namespace) &&
     scope.sensitivities.includes(doc.sensitivity) &&
-    doc.status !== "archived";
+    doc.status !== "archived" &&
+    !(note_rules?.quarantine_invalid && doc.validationStatus === "invalid");
 
   await writeAudit({
     actor,

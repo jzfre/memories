@@ -1,5 +1,9 @@
 # Review Pack — Whole Project (Phases 0–10)
 
+> **⚠️ HISTORICAL (predates the 2026-07 peer-work simplification).** This review pack
+> covers the original propose→approve build. That pipeline was removed; AI clients now
+> write directly. Kept for provenance — see `README.md` / `DOCUMENTATION.md` for current state.
+
 ## Goal
 
 Build a local-first Knowledge Intelligence OS: ingest an Obsidian vault into Postgres,

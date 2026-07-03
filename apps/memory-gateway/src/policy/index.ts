@@ -23,8 +23,12 @@ export function intersectScope(
   return { namespaces, sensitivities };
 }
 
-/** Config-bound wrapper used by retrieval. */
-export function resolveScope(requested: ScopeRequest): ResolvedScope {
+/** Config-bound by default; pass `allow` to scope against a connector profile instead. */
+export function resolveScope(
+  requested: ScopeRequest,
+  allow?: { namespaces: string[]; sensitivities: string[] },
+): ResolvedScope {
+  if (allow) return intersectScope(requested, allow.namespaces, allow.sensitivities);
   const { policy } = loadConfig();
   return intersectScope(requested, policy.allowed_namespaces, policy.allowed_sensitivity);
 }

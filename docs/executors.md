@@ -1,8 +1,9 @@
 # Executor guides
 
 An *executor* is any AI client or agent surface that connects to the Memory Gateway.
-Policy (namespace/sensitivity scope, proposal-only writeback, audit logging) is enforced
-server-side below all adapters — no executor can bypass it.
+Policy (namespace/sensitivity scope, write guards, audit logging) is enforced
+server-side below all adapters — no executor can bypass it. Under the peer-work model,
+executors with the `write` capability create notes directly; the owner reviews by editing.
 
 See also: [Connecting MCP clients](mcp-clients.md) for Claude Code and VS Code quickstart configs.
 
@@ -104,8 +105,6 @@ If Hermes requires a direct executable rather than `pnpm`, use the LM Studio pat
   `tsx`).  The server will fail to load config if `cwd` is wrong.
 - All namespace and sensitivity policy is enforced server-side; the executor model has
   no ability to override scope or bypass the audit log.
-- Local models should be used for `private` and above sensitivity corpora (see
-  [Local model policy](#local-model-policy) below).
 
 ---
 
@@ -120,17 +119,11 @@ via MCP.
    to pull scoped context before generating a response.
 2. **Context packs** — call `POST /memory/context-pack` or `memory_context_pack` for
    goal-oriented, token-budgeted context ready for LLM consumption.
-3. **Writeback** — agents may only propose knowledge; never write directly.  Use
-   `POST /proposals` (REST) or `memory_propose_note` / `memory_propose_patch` (MCP).
-   The proposal is queued as `pending_review`; no vault file is created until a human
-   approves it via the CLI (`pnpm proposals review <id> --approve`) or the REST
-   endpoint (`POST /proposals/:id/review`).
-
-**Do not expose the review/approve surface to a chat surface.**  Per
-`docs/implementation-plan.md` §20.4, v1 exposes Tier 0 (read) and Tier 1 (propose)
-tools only over MCP.  Review/approve is Tier 2 and is restricted to the human
-CLI/REST surface.  Wiring `POST /proposals/:id/review` into an automated chat flow
-would allow an agent to commit arbitrary Markdown to the canonical vault.
+3. **Writeback** — executors with the `write` capability create notes directly via the
+   `memory_write_note` / `memory_update_note` MCP tools. The file is written to the vault
+   immediately (default folder `00-inbox/`); the owner reviews by editing. Writes are MCP-only
+   (no REST write route). The only refusals are secret-looking content and a body that
+   starts with a `---` frontmatter block.
 
 **Namespace and sensitivity scoping** is enforced server-side.  OpenClaw/IronClaw
 cannot retrieve documents outside the configured allowlists regardless of what is
@@ -138,17 +131,13 @@ requested in the query.
 
 ---
 
-## Local model policy
+## Sensitivity & model policy
 
-The following rules govern which AI models may process retrieved content:
-
-| Sensitivity label       | Allowed models                                        |
-|-------------------------|-------------------------------------------------------|
-| `public`                | Any model, including cloud (Claude, GPT-4, etc.)      |
-| `internal`              | Any model, including cloud                            |
-| `private`               | Local models only by default; cloud requires explicit owner approval per session |
-| `confidential`          | Local models only                                     |
-| `client-confidential`   | Local models only; never leaves the machine without explicit owner approval |
+Sensitivity is `public` | `internal`. Per the owner's decision, all connected clients
+(including cloud clients like ChatGPT) may read and write everything — sensitivity is a
+label for organization, not an access gate. If you ever reintroduce a "cloud must not
+see X" rule, narrow a connector's `scope.sensitivities` in `config.yaml` (the
+scope-intersection machinery is still present and enforced server-side).
 
 **Embeddings** are always computed locally via LM Studio's nomic model, regardless of
 chat model selection.  The `DisabledEmbedder` is used when `EMBEDDINGS_ENABLED=0`

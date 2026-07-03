@@ -22,3 +22,4 @@ prisma/*.db
 
 # Local Claude settings
 .claude/settings.local.json
+.playwright-mcp/

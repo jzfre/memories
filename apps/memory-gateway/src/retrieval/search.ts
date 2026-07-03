@@ -58,14 +58,14 @@ function freshnessPenalty(f: { validation: string; embedding: string }): number 
 
 export async function search(
   args: SearchArgs,
-  ctx: { client: string },
+  ctx: { client: string; scope?: { namespaces: string[]; sensitivities: string[] } },
   deps: SearchDeps = {},
 ): Promise<SearchResponse> {
-  const { actor } = loadConfig();
-  const scope = resolveScope({
-    namespaces: args.namespaces,
-    sensitivityAllowed: args.sensitivity_allowed,
-  });
+  const { actor, note_rules } = loadConfig();
+  const scope = resolveScope(
+    { namespaces: args.namespaces, sensitivityAllowed: args.sensitivity_allowed },
+    ctx.scope,
+  );
   const topK = args.top_k ?? 10;
   const embedder = deps.embedder ?? getDefaultEmbedder();
 
@@ -93,10 +93,14 @@ export async function search(
   }
 
   const candLimit = Math.max(topK * 4, 20);
+  const quarantine = note_rules?.quarantine_invalid
+    ? Prisma.sql`AND d.validation_status <> 'invalid'`
+    : Prisma.empty;
   const scopeWhere = Prisma.sql`
     d.namespace IN (${Prisma.join(scope.namespaces)})
     AND d.sensitivity IN (${Prisma.join(scope.sensitivities)})
-    AND d.status <> 'archived'`;
+    AND d.status <> 'archived'
+    ${quarantine}`;
   const headlineQ = Prisma.sql`websearch_to_tsquery('english', ${args.query})`;
 
   // ---- Full-text candidates (precision-first AND, OR-fallback for recall) ----

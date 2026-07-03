@@ -29,6 +29,8 @@ export function loadConfig(): Config {
   const parsed = parseYaml(readFileSync(file, "utf8"));
   const config = ConfigSchema.parse(parsed);
   if (process.env.VAULT_ROOT) config.vault.root = process.env.VAULT_ROOT;
+  if (process.env.NOTE_RULES_QUARANTINE === "1") config.note_rules.quarantine_invalid = true;
+  if (process.env.NOTE_RULES_QUARANTINE === "0") config.note_rules.quarantine_invalid = false;
   cached = config;
   return config;
 }

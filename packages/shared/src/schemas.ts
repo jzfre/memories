@@ -1,5 +1,23 @@
 import { z } from "zod";
 
+const ScopeSchema = z.object({
+  namespaces: z.union([z.literal("*"), z.array(z.string())]).default("*"),
+  sensitivities: z.union([z.literal("*"), z.array(z.string())]).default("*"),
+});
+
+const ConnectorSchema = z.object({
+  transport: z.enum(["stdio", "http"]),
+  auth: z.enum(["none", "token", "oauth"]).default("none"),
+  capabilities: z.array(z.enum(["read", "write"])).default(["read"]),
+  scope: ScopeSchema.default({ namespaces: "*", sensitivities: "*" }),
+  public_base_url: z.string().optional(),
+});
+
+const NoteRulesSchema = z.object({
+  severities: z.record(z.enum(["block", "flag"])).default({}),
+  quarantine_invalid: z.boolean().default(false),
+});
+
 export const ConfigSchema = z.object({
   vault: z.object({ root: z.string().min(1) }),
   policy: z.object({
@@ -9,6 +27,8 @@ export const ConfigSchema = z.object({
     allowed_sensitivity: z.array(z.string()).min(1),
   }),
   actor: z.string().default("local"),
+  connectors: z.record(ConnectorSchema).default({}),
+  note_rules: NoteRulesSchema.default({ severities: {}, quarantine_invalid: false }),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
