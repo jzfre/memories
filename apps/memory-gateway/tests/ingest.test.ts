@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { resolve } from "node:path";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { prisma, resetDb } from "./helpers/db";
 
 const VAULT = resolve(__dirname, "fixtures/vault");
@@ -44,5 +46,35 @@ describe("scanVault", () => {
     expect(emptyChunks).toBe(0);
     const total = await prisma.chunk.count();
     expect(total).toBeGreaterThan(0);
+  });
+});
+
+describe("scanVault ignores sync/tool artifacts", () => {
+  let dir: string;
+  beforeEach(async () => {
+    await resetDb();
+    dir = mkdtempSync(join(tmpdir(), "memscan-"));
+    // real note
+    writeFileSync(join(dir, "real.md"), `---\nsensitivity: internal\n---\n# Real\n\nknowledge`);
+    // Syncthing version history — deleted/old copies must NOT be knowledge
+    mkdirSync(join(dir, ".stversions", "old"), { recursive: true });
+    writeFileSync(join(dir, ".stversions", "old", "ghost~20260101-000000.md"), "# Ghost\n\nstale");
+    // Syncthing conflict copy — duplicate, not knowledge
+    writeFileSync(join(dir, "real.sync-conflict-20260101-000000-ABCDEFG.md"), "# Conflict\n\ndupe");
+    // SilverBullet space config at root — tool config, not knowledge
+    writeFileSync(join(dir, "CONFIG.md"), "```space-lua\nconfig.set{}\n```");
+    // dotfile note
+    writeFileSync(join(dir, ".hidden.md"), "# Hidden");
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("indexes only the real note", async () => {
+    process.env.VAULT_ROOT = dir;
+    const { __resetConfigCache } = await import("../src/config/index");
+    __resetConfigCache();
+    const { scanVault } = await import("../src/ingest/indexer");
+    await scanVault();
+    const docs = await prisma.document.findMany({ where: { status: { not: "archived" } }, select: { path: true } });
+    expect(docs.map((d) => d.path)).toEqual(["real.md"]);
   });
 });
