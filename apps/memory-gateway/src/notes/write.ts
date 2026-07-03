@@ -47,11 +47,30 @@ const ALLOWED_SENSITIVITIES = ["public", "internal"];
 // Small helpers (recovered/adapted from the deleted proposals/index.ts)
 // ---------------------------------------------------------------------------
 
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+/**
+ * The filename IS the title (both Obsidian and SilverBullet display the page name),
+ * so keep it human-readable: preserve case and spaces, strip only characters that
+ * break filesystems or [[wikilinks]]/#tags, collapse whitespace, cap the length.
+ */
+function fileTitle(title: string): string {
+  const cleaned = title
+    .replace(/[\\/:*?"<>|#^\[\]{}`]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\.+/, "")
+    .trim()
+    .slice(0, 120)
+    .trim();
+  return cleaned || "Untitled";
+}
+
+/**
+ * Models often start `content` with their own `# Title` even though the gateway
+ * prepends the canonical one — strip a single leading H1 so notes always have
+ * exactly one H1 (the title).
+ */
+function stripLeadingH1(content: string): string {
+  return content.replace(/^\s*#[ \t][^\n]*\n+/, "");
 }
 
 /** Lowercase + strip anything that could inject a new YAML line/key. */
@@ -203,12 +222,12 @@ export async function writeNote(input: WriteNoteInput, ctx: { client: string }):
   const folder = resolveTargetFolder(vaultRoot, input.folder);
   const targetDir = join(vaultRoot, folder);
 
-  // --- Filename (collision-safe) ---
-  const slug = slugify(input.title);
-  let fileName = `${slug}.md`;
+  // --- Filename (human-readable title, collision-safe) ---
+  const base = fileTitle(input.title);
+  let fileName = `${base}.md`;
   let suffix = 2;
   while (existsSync(join(targetDir, fileName))) {
-    fileName = `${slug}-${suffix}.md`;
+    fileName = `${base} ${suffix}.md`;
     suffix++;
   }
   const filePath = join(targetDir, fileName);
@@ -225,7 +244,8 @@ export async function writeNote(input: WriteNoteInput, ctx: { client: string }):
   }
   fmLines.push(`created: ${frontmatterDate(new Date())}`, "---");
 
-  const md = `${fmLines.join("\n")}\n\n# ${input.title}\n\n${input.content}\n`;
+  const body = stripLeadingH1(input.content);
+  const md = `${fmLines.join("\n")}\n\n# ${input.title.trim()}\n\n${body}\n`;
 
   // --- Atomic write ---
   atomicWrite(filePath, targetDir, fileName, md);

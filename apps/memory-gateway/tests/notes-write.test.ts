@@ -28,11 +28,11 @@ describe("writeNote", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("creates 00-inbox/<slug>.md with exactly the expected frontmatter, intact body, and an indexed document", async () => {
+  it("creates 00-inbox/<Title>.md with exactly the expected frontmatter, intact body, and an indexed document", async () => {
     const { writeNote, prisma } = await setup(dir);
     const res = await writeNote({ title: "My First Note", content: "Hello world body." }, { client: "test" });
 
-    expect(res.path).toBe("00-inbox/my-first-note.md");
+    expect(res.path).toBe("00-inbox/My First Note.md");
     const filePath = join(dir, res.path);
     expect(existsSync(filePath)).toBe(true);
 
@@ -49,15 +49,15 @@ describe("writeNote", () => {
 
     const doc = await prisma.document.findUnique({ where: { id: res.document_id } });
     expect(doc).not.toBeNull();
-    expect(doc?.path).toBe("00-inbox/my-first-note.md");
+    expect(doc?.path).toBe("00-inbox/My First Note.md");
   });
 
-  it("collision: a second write with the same title yields a -2 filename and a distinct id", async () => {
+  it("collision: a second write with the same title yields a ' 2' filename and a distinct id", async () => {
     const { writeNote } = await setup(dir);
     const first = await writeNote({ title: "Dup Title", content: "First body text." }, { client: "test" });
     const second = await writeNote({ title: "Dup Title", content: "Second body text." }, { client: "test" });
-    expect(first.path).toBe("00-inbox/dup-title.md");
-    expect(second.path).toBe("00-inbox/dup-title-2.md");
+    expect(first.path).toBe("00-inbox/Dup Title.md");
+    expect(second.path).toBe("00-inbox/Dup Title 2.md");
     expect(first.document_id).not.toBe(second.document_id);
   });
 
@@ -68,7 +68,7 @@ describe("writeNote", () => {
       { title: "Decide Something", content: "Body text here.", folder: "20-decisions" },
       { client: "test" },
     );
-    expect(res.path).toBe("20-decisions/decide-something.md");
+    expect(res.path).toBe("20-decisions/Decide Something.md");
     expect(existsSync(join(dir, res.path))).toBe(true);
   });
 
@@ -109,6 +109,29 @@ describe("writeNote", () => {
     await expect(
       writeNote({ title: "Bad", content: "---\nkind: note\n---\nbody" }, { client: "test" }),
     ).rejects.toThrow();
+  });
+
+  it("dedupes a leading H1 in content — the note has exactly one H1, the title", async () => {
+    const { writeNote } = await setup(dir);
+    const res = await writeNote(
+      { title: "Dallas Housing", content: "# Dallas Housing\n\n## Office anchor\n\n- Whitacre Tower" },
+      { client: "test" },
+    );
+    const raw = readFileSync(join(dir, res.path), "utf8");
+    const h1s = raw.split("\n").filter((l) => /^# /.test(l));
+    expect(h1s).toEqual(["# Dallas Housing"]);
+    expect(raw).toContain("## Office anchor");
+  });
+
+  it("sanitizes filesystem/link-breaking characters out of the filename but keeps the human title in the H1", async () => {
+    const { writeNote } = await setup(dir);
+    const res = await writeNote(
+      { title: "Budget: 2026/07 [draft] #1", content: "Body text." },
+      { client: "test" },
+    );
+    expect(res.path).toBe("00-inbox/Budget 2026 07 draft 1.md");
+    const raw = readFileSync(join(dir, res.path), "utf8");
+    expect(raw).toContain("# Budget: 2026/07 [draft] #1");
   });
 
   it("throws on an invalid sensitivity value", async () => {
@@ -185,7 +208,7 @@ describe("memory_write_note (MCP, in-memory transport, default profile)", () => 
     });
     expect(res.isError).toBeFalsy();
     const payload = JSON.parse(res.content[0].text);
-    expect(payload.path).toBe("00-inbox/mcp-written-note.md");
+    expect(payload.path).toBe("00-inbox/MCP Written Note.md");
     expect(existsSync(join(dir, payload.path))).toBe(true);
 
     await client.close();
