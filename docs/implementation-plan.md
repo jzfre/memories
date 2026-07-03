@@ -1,5 +1,11 @@
 # Knowledge Intelligence OS - Architecture and Implementation Plan
 
+> **⚠️ HISTORICAL (predates the 2026-07 peer-work simplification).** This plan describes
+> the original propose→approve design. That pipeline was later removed: AI clients now
+> write notes directly (`memory_write_note`/`memory_update_note`), reviewed by editing.
+> Kept for provenance. For current behavior see `README.md`, `DOCUMENTATION.md`, and the
+> vault protocol note `99-meta/PROTOCOL.md`.
+
 **Status:** Implementation-ready architecture draft  
 **Date:** 2026-06-06  
 **Primary owner:** Human owner / architect  

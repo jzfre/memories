@@ -51,7 +51,7 @@ pnpm scan
 pnpm status           # confirm documents/chunks indexed
 ```
 
-Search, fetch, proposals, and the MCP server all work in FTS-only mode. You lose
+Search, fetch, note writes, and the MCP server all work in FTS-only mode. You lose
 *semantic* matching (e.g. "brain gym project" → a note that says "externalizing memory")
 but keep strong keyword + title/namespace/tag search.
 

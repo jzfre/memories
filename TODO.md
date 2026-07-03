@@ -1,3 +1,13 @@
+> **STATUS (2026-07):** Much of the below is DONE or superseded. Live now: MCP gateway +
+> HTTP transport on eternity (`mcp.aqui.technology`), SilverBullet web UI
+> (`memories.aqui.technology`), Syncthing two-way Mac↔eternity vault sync, ChatGPT/Claude
+> connected. The design moved to a **peer-work model**: the propose→approve pipeline was
+> removed — AI clients write notes directly (`memory_write_note`/`memory_update_note`) and
+> the owner reviews by editing. Frontmatter is minimal (no status/confidence/namespace);
+> sensitivity is public|internal. Any propose/approve/validation text below is historical.
+> Still open: file-watcher (low-latency reindex, currently a 1-min cron), wikilink→backlink
+> graph, Graphify, connection-aware capture. See `DOCUMENTATION.md` + `99-meta/PROTOCOL.md`.
+
 - [MCP] have all the MCP commands fully working and tested
 - [MCP ]have a live service so we can hit MCP on local network also (not only NPX on local folder)
 - Define the ingestion pipeline, validation etc, - Recompute connections on ingestion

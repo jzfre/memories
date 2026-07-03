@@ -9,11 +9,13 @@ chunks, embeddings, and most metadata.
 
 The only Postgres data that cannot be rebuilt from the vault are:
 
-- `audit_log` — record of every retrieval and proposal action
+- `audit_log` — record of every retrieval and write action
 - `retrieval_traces` — query/ranking debug data for past searches
-- `proposals` (pending / reviewed proposals that have not yet been merged to the vault)
 
-If audit history and unmerged proposals matter to you, also take a periodic `pg_dump`.
+(The `proposals` / `knowledge_events` tables still exist but are dormant under the
+peer-work model — notes are written straight to the vault, so they hold no live data.)
+
+If audit history matters to you, also take a periodic `pg_dump`.
 
 ---
 
@@ -109,9 +111,9 @@ Expected: at least one result; no database error in the terminal.
 
 ## What is NOT stored (by design)
 
-No secret values are ever written to the vault, the database, or any log.  The
-validation engine actively rejects proposals containing detected secrets (private keys,
-AWS credentials, GitHub tokens, bearer tokens, etc.).  Only **references** to secrets
+No secret values are ever written to the vault, the database, or any log.  The write
+path actively rejects notes containing detected secrets (private keys, AWS credentials,
+GitHub tokens, bearer tokens, etc.).  Only **references** to secrets
 (e.g. `secret_ref: op://vault/item/field`) are permitted in documents, and they are
 not treated as findings.
 
@@ -125,4 +127,3 @@ not treated as findings.
 | Postgres index            | Optional `pg_dump`     | `pnpm rebuild`                |
 | Postgres embeddings       | Optional `pg_dump`     | `pnpm reembed`                |
 | Audit log / traces        | `pg_dump` recommended  | Not rebuildable from vault    |
-| Proposals (unmerged)      | `pg_dump` recommended  | Not rebuildable from vault    |
