@@ -7,7 +7,7 @@ description: Use when the user asks to remember, save, store, or capture knowled
 
 ## Overview
 
-**Canonical protocol: the vault note `99-meta/PROTOCOL.md`** — served to every MCP
+**Canonical protocol: the vault note `0x09 Meta/Protocol.md`** — served to every MCP
 client as server instructions at connect, and re-readable via the `memory_protocol`
 tool. Prefer that when connected (it may be newer); this skill is the local summary.
 
@@ -33,12 +33,12 @@ No `status`, no `confidence`, no `namespace` — those fields no longer exist.
 user asks to remember X
   → memory_search for related notes (link them with [[wikilinks]])
   → draft title (the concept, not a date) + body in the user's wording
-  → memory_write_note { title, content, kind?, tags?, folder?, source_refs? }
+  → memory_write_note { title, content, folder, kind?, tags?, source_refs? }
   → relay the created path; the owner tweaks it in Obsidian/SilverBullet if needed
 ```
 
-- Default landing folder is `00-inbox/`; pass `folder` (e.g. `50-projects`) only when
-  confident it's the right home.
+- There is no inbox fallback; pass `folder` every time (for example
+  `0x05 Projects/Personal`). If you cannot choose the section confidently, ask first.
 - To revise an existing note: `memory_fetch` it, then `memory_update_note` — keep the
   owner's voice; frontmatter is preserved.
 

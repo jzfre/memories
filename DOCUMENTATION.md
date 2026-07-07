@@ -35,7 +35,7 @@ If that history matters to you, `pg_dump` it — see `docs/backup-restore.md`.
 │  canonical vault (git)   │        │  memories tool (git)         │
 │  *.md + frontmatter      │◄──────┤│  reads at scan; AI clients   │
 │                          │ index  │  write directly (guarded)    │
-│  00-inbox/  ◄────────────┼────────┤  via memory_write_note       │
+│  0xNN sections ◄─────────┼────────┤  via memory_write_note       │
 └──────────────────────────┘        │           │                  │
                                     │           ▼                  │
                                     │  Postgres (derived index)    │
@@ -189,7 +189,7 @@ memory_write_note ─────────► guard: secret scan ────
                                       ▼
                              atomic write: temp file + rename, SAME directory
                                (SilverBullet can safely read mid-write)
-                               to <folder||00-inbox>/<slug>.md (collision → -2, -3, …)
+                               to <folder>/<Title>.md (collision → " 2", " 3", …)
                                       ▼
                              synchronous rescan — searchable before the tool call returns
                                       ▼
@@ -241,11 +241,11 @@ There is no REST write route by design — REST is currently read/operate-only
 separate CLI gating command — the CLI (`apps/memory-gateway/src/cli/index.ts`) only has
 `scan`, `reembed`, `rebuild`, `status`, and `audit`.
 
-### 4.3 The only two guards
+### 4.3 The two content guards
 
 Both guards run in `apps/memory-gateway/src/notes/write.ts` on every
 `memory_write_note` and `memory_update_note` call, and are the *entire* blocking
-surface — nothing else about a write is checked before it lands on disk:
+content-safety surface:
 
 | Guard | What it catches | Bypassable? |
 |---|---|---|
@@ -256,8 +256,8 @@ Everything else that used to sit between a draft and a merged note — namespace
 sensitivity allowlist checks, duplicate/contradiction detection, "needs more evidence,"
 a 0–12 scoring rubric, `human_review_required` labels — is gone. `sensitivity` is still validated against the
 two allowed values (`public`/`internal`) as a plain input-validation check (an invalid
-value is a usage error, not a policy gate), and that's the only other rejection a write
-can hit.
+value is a usage error, not a policy gate). `folder` is also required and must point to
+an existing vault folder; there is no inbox fallback.
 
 Separately, at **scan time** (not write time), `packages/shared/src/note-schema.ts`
 flags a few more things — unrecognized `kind`, malformed tags, missing structured-kind
@@ -271,10 +271,10 @@ search). They never block a write and never block indexing.
 
 1. Run the two guards over `title + content`.
 2. Validate `sensitivity` (default `internal`) is `public` or `internal`.
-3. Resolve the target folder: `folder` if given (must already exist and resolve inside
-   the vault root — the gateway never creates arbitrary directories on your behalf),
-   else `00-inbox` (auto-created if missing).
-4. Slugify the title into a filename; on collision, append `-2`, `-3`, ….
+3. Resolve the target folder: `folder` is required, must already exist, and must
+   resolve inside the vault root — the gateway never creates arbitrary directories on
+   your behalf.
+4. Turn the title into a human-readable filename; on collision, append ` 2`, ` 3`, ….
 5. Compose frontmatter from the arguments: `kind` (sanitized to `[a-z0-9-_]`, default
    `note`), `sensitivity`, `tags` (sanitized), optional `source_refs` (quoted YAML
    strings), and `created` (today's UTC date). Body is `# <title>\n\n<content>`.
@@ -297,12 +297,13 @@ preserved byte-for-byte via `frontmatterEndOffset`).
 # Claude Code (or ChatGPT, via the tunneled HTTP profile) calls the tool directly —
 # no human step required:
 memory_write_note({
-  title: "UAT analytics finding",
+  title: "UAT Analytics Finding",
   content: "...",
   kind: "finding",
-  tags: ["client-a", "uat"]
+  tags: ["client-a", "uat"],
+  folder: "0x05 Projects/Personal"
 })
-# → { "document_id": "...", "path": "00-inbox/uat-analytics-finding.md" }
+# → { "document_id": "...", "path": "0x05 Projects/Personal/UAT Analytics Finding.md" }
 
 # The file now exists in the vault, is versioned by Syncthing, and is already
 # searchable. The owner reviews it later by opening it in Obsidian/SilverBullet and
@@ -313,7 +314,7 @@ memory_write_note({
 
 The actual "how to write a good note" guidance — allowed kinds, structured-kind
 sections, tag rules, folder routing, link etiquette — lives in a single vault note,
-`99-meta/PROTOCOL.md`, not in code. Every MCP client receives its contents as **server
+`0x09 Meta/Protocol.md`, not in code. Every MCP client receives its contents as **server
 instructions at `initialize`** (`apps/memory-gateway/src/mcp/build.ts`, via
 `loadProtocol()`), so there is one copy to keep current instead of one per client
 config. It's also re-readable any time via the `memory_protocol` tool. The

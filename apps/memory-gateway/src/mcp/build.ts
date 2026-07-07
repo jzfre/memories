@@ -28,7 +28,7 @@ export function buildMcpServer(profile: ResolvedProfile = resolveProfile("claude
     {
       title: "memory.protocol",
       description:
-        "Returns the knowledge-base protocol (the canonical vault note 99-meta/PROTOCOL.md): allowed kinds, required sections, tag rules, and folder routing. Re-read this whenever unsure how to format a note or where it belongs.",
+        `Returns the knowledge-base protocol (the canonical vault note ${PROTOCOL_PATH}): allowed kinds, required sections, tag rules, and folder routing. Re-read this whenever unsure how to format a note or where it belongs.`,
       inputSchema: {},
     },
     async () => {
@@ -149,14 +149,14 @@ export function buildMcpServer(profile: ResolvedProfile = resolveProfile("claude
       {
         title: "memory.write_note",
         description:
-          "Write a note DIRECTLY into the owner's vault (no approval step — the owner reviews by editing, like a colleague). Draft in the owner's wording; link related notes with [[wikilinks]] found via memory_search; default landing folder is 00-inbox unless you're confident of the right folder. Secrets are refused.",
+          "Write a note DIRECTLY into the owner's vault (no approval step — the owner reviews by editing, like a colleague). Draft in the owner's wording; link related notes with [[wikilinks]] found via memory_search; folder is required and must be an existing vault folder. Secrets are refused.",
         inputSchema: {
           title: z.string(),
           content: z.string(),
           kind: z.string().optional(),
           tags: z.array(z.string()).optional(),
           sensitivity: z.string().optional(),
-          folder: z.string().optional(),
+          folder: z.string(),
           source_refs: z.array(z.string()).optional(),
         },
       },

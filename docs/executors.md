@@ -121,9 +121,9 @@ via MCP.
    goal-oriented, token-budgeted context ready for LLM consumption.
 3. **Writeback** — executors with the `write` capability create notes directly via the
    `memory_write_note` / `memory_update_note` MCP tools. The file is written to the vault
-   immediately (default folder `00-inbox/`); the owner reviews by editing. Writes are MCP-only
-   (no REST write route). The only refusals are secret-looking content and a body that
-   starts with a `---` frontmatter block.
+   immediately; `folder` is required and must be an existing vault folder. The owner
+   reviews by editing. Writes are MCP-only (no REST write route). The content refusals
+   are secret-looking content and a body that starts with a `---` frontmatter block.
 
 **Namespace and sensitivity scoping** is enforced server-side.  OpenClaw/IronClaw
 cannot retrieve documents outside the configured allowlists regardless of what is

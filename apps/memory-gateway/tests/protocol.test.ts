@@ -1,5 +1,5 @@
 /**
- * The KB protocol lives IN the vault (99-meta/PROTOCOL.md) and is served to every
+ * The KB protocol lives IN the vault (0x09 Meta/Protocol.md) and is served to every
  * MCP client: as server `instructions` at initialize, and via the memory_protocol
  * tool for mid-session re-reads. No client-side copies to drift.
  */
@@ -19,7 +19,7 @@ async function setup(vaultRoot: string) {
   __resetConfigCache();
 }
 
-const PROTO_BODY = "# KB Protocol\n\nAllowed kinds: note, decision. Route career notes to 30-career.";
+const PROTO_BODY = "# KB Protocol\n\nAllowed kinds: note, decision. Route career notes to 0x03 Career.";
 const PROTO_WITH_FM = `---\nnamespace: personal\nsensitivity: internal\nkind: note\ntags: [meta]\n---\n\n${PROTO_BODY}`;
 
 describe("loadProtocol (pure-ish)", () => {
@@ -30,8 +30,8 @@ describe("loadProtocol (pure-ish)", () => {
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   it("returns the protocol body (frontmatter stripped) when the note exists", async () => {
-    mkdirSync(join(dir, "99-meta"), { recursive: true });
-    writeFileSync(join(dir, "99-meta", "PROTOCOL.md"), PROTO_WITH_FM);
+    mkdirSync(join(dir, "0x09 Meta"), { recursive: true });
+    writeFileSync(join(dir, "0x09 Meta", "Protocol.md"), PROTO_WITH_FM);
     await setup(dir);
     const { loadProtocol } = await import("../src/protocol/index");
     const p = loadProtocol();
@@ -46,8 +46,8 @@ describe("loadProtocol (pure-ish)", () => {
   });
 
   it("truncates an oversized protocol with a marker", async () => {
-    mkdirSync(join(dir, "99-meta"), { recursive: true });
-    writeFileSync(join(dir, "99-meta", "PROTOCOL.md"), "x".repeat(30000));
+    mkdirSync(join(dir, "0x09 Meta"), { recursive: true });
+    writeFileSync(join(dir, "0x09 Meta", "Protocol.md"), "x".repeat(30000));
     await setup(dir);
     const { loadProtocol } = await import("../src/protocol/index");
     const p = loadProtocol()!;
@@ -77,8 +77,8 @@ describe("MCP: instructions at initialize + memory_protocol tool", () => {
   }
 
   it("serves the protocol as server instructions and via memory_protocol", async () => {
-    mkdirSync(join(dir, "99-meta"), { recursive: true });
-    writeFileSync(join(dir, "99-meta", "PROTOCOL.md"), PROTO_WITH_FM);
+    mkdirSync(join(dir, "0x09 Meta"), { recursive: true });
+    writeFileSync(join(dir, "0x09 Meta", "Protocol.md"), PROTO_WITH_FM);
     await setup(dir);
     await connect();
     expect(client.getInstructions()).toContain("Allowed kinds");
@@ -92,6 +92,6 @@ describe("MCP: instructions at initialize + memory_protocol tool", () => {
     await connect();
     expect(client.getInstructions() ?? "").not.toContain("Allowed kinds");
     const res: any = await client.callTool({ name: "memory_protocol", arguments: {} });
-    expect(res.content[0].text).toContain("99-meta/PROTOCOL.md");
+    expect(res.content[0].text).toContain("0x09 Meta/Protocol.md");
   });
 });

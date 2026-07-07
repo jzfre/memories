@@ -67,7 +67,10 @@ export function start(port: number = DEFAULT_PORT): Promise<Server> {
       await mcp.connect(transport);
       await transport.handleRequest(req, res, body);
     } catch (err) {
-      if (!res.headersSent) send(res, 500, { error: "internal error", detail: (err as Error).message });
+      // Log the detail server-side; do NOT return err.message to remote callers — on the
+      // internet-exposed transport it can leak internal paths, DB errors, or stack context.
+      console.error("[mcp-http] request error:", err);
+      if (!res.headersSent) send(res, 500, { error: "internal error" });
     }
   });
   // Default to loopback; set MCP_HTTP_HOST=0.0.0.0 inside a container (Docker publishes the

@@ -7,7 +7,7 @@ import { loadConfig } from "../config/index";
  * edit it in Obsidian/SilverBullet and every MCP client picks it up on its next
  * connection — served as server `instructions` at initialize and via memory_protocol.
  */
-export const PROTOCOL_PATH = "99-meta/PROTOCOL.md";
+export const PROTOCOL_PATH = "0x09 Meta/Protocol.md";
 
 /** Cap what gets injected into every client session; the full note stays readable in the vault. */
 const MAX_CHARS = 16000;

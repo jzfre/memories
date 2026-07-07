@@ -42,11 +42,12 @@ conversation. ChatGPT sees the read tools (`search`, `fetch`, `memory_search`,
 
 ## 5. How writes work
 
-`memory_write_note` creates a real `.md` file in the vault immediately (default folder
-`00-inbox/`); `memory_update_note` replaces a note's body. There is no approval step —
-review by editing the note in Obsidian/SilverBullet. The only refusals: content that
-looks like credentials, and bodies that start with `---`. The working rules live in the
-vault note `99-meta/PROTOCOL.md`, which every MCP client receives at connect.
+`memory_write_note` creates a real `.md` file in the vault immediately; `folder` is
+required and must be an existing vault folder. `memory_update_note` replaces a note's
+body. There is no approval step — review by editing the note in Obsidian/SilverBullet.
+The content refusals are secret-looking content and bodies that start with `---`. The
+working rules live in the vault note `0x09 Meta/Protocol.md`, which every MCP client
+receives at connect.
 
 ## Security notes
 

@@ -5,7 +5,7 @@
  * injection are refused; everything else lands.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { documentIdFromPath } from "@memories/shared";
 import { loadConfig } from "../config/index";
@@ -138,6 +138,22 @@ function assertNoSecrets(text: string): void {
   }
 }
 
+/**
+ * Assert that `target` stays inside the vault root even after symlink resolution.
+ * `resolve()`/`startsWith()` checks operate on strings and do NOT follow symlinks, so a
+ * symlinked directory inside the vault could redirect a write outside it. We canonicalize
+ * both paths with realpathSync and compare. `target` must already exist (callers check).
+ * `vaultRoot` is realpathed too so a vault mounted under a symlinked prefix (e.g. macOS
+ * /var → /private/var) still compares correctly.
+ */
+function assertInsideVault(target: string, vaultRoot: string, label: string): void {
+  const realVaultRoot = realpathSync(vaultRoot);
+  const realTarget = realpathSync(target);
+  if (realTarget !== realVaultRoot && !realTarget.startsWith(realVaultRoot + sep)) {
+    throw new Error(`Invalid ${label}: resolves (via a symlink) outside the vault.`);
+  }
+}
+
 /** Atomic-ish write: write to a temp file in the same directory, then rename over the target. */
 function atomicWrite(filePath: string, dir: string, fileName: string, content: string): void {
   const tmpPath = join(dir, `.tmp-${fileName}-${randomBytes(4).toString("hex")}`);
@@ -147,15 +163,20 @@ function atomicWrite(filePath: string, dir: string, fileName: string, content: s
 
 /**
  * Resolve+validate the target folder (relative to the vault root):
- *  - default (no folder given) is "00-inbox", auto-created if missing.
- *  - an explicit folder must normalize to a path with no ".."/leading "."/"_"
- *    segments, must resolve inside the vault root, and must already exist as a
- *    directory (we never create arbitrary trees on the owner's behalf) — except
- *    "00-inbox" itself, which is always auto-created.
+ *  - folder is required; there is no inbox fallback.
+ *  - it must normalize to a path with no ".."/leading "."/"_" segments,
+ *    must resolve inside the vault root, and must already exist as a directory
+ *    (we never create arbitrary trees on the owner's behalf).
  * Returns the normalized (slash-joined, no leading/trailing slash) folder path.
  */
 function resolveTargetFolder(vaultRoot: string, folderInput: string | undefined): string {
-  const raw = folderInput ?? "00-inbox";
+  if (!folderInput) {
+    throw new Error(
+      "Folder is required. Choose an existing vault section folder such as `0x05 Projects/Personal`; there is no inbox fallback.",
+    );
+  }
+
+  const raw = folderInput;
   const normalized = raw.replace(/^\/+|\/+$/g, "");
   const segments = normalized.split("/").filter(Boolean);
   const invalidSegment = segments.find((s) => s === ".." || s.startsWith(".") || s.startsWith("_"));
@@ -171,17 +192,18 @@ function resolveTargetFolder(vaultRoot: string, folderInput: string | undefined)
     throw new Error(`Invalid folder "${raw}": resolves outside the vault.`);
   }
 
-  if (normalized === "00-inbox") {
-    mkdirSync(resolvedTarget, { recursive: true });
-    return normalized;
-  }
-
   if (!existsSync(resolvedTarget) || !statSync(resolvedTarget).isDirectory()) {
     throw new Error(
       `Folder "${normalized}" does not exist in the vault. \`folder\` must be an existing vault folder ` +
-        `(create it yourself first, or omit \`folder\` to land in 00-inbox).`,
+        `(create it yourself first, or choose one of the 0xNN section folders).`,
     );
   }
+
+  // Symlink-safe containment: resolve()/startsWith above is pure string math, so a
+  // symlinked directory inside the vault (e.g. propagated by Syncthing, or planted by
+  // another local process) could still point OUTSIDE. Canonicalize both sides and
+  // re-check before we trust the target.
+  assertInsideVault(resolvedTarget, resolvedVaultRoot, `folder "${raw}"`);
 
   return normalized;
 }
@@ -196,7 +218,7 @@ export interface WriteNoteInput {
   kind?: string;
   tags?: string[];
   sensitivity?: string;
-  folder?: string;
+  folder: string;
   source_refs?: string[];
 }
 
@@ -298,6 +320,9 @@ export async function updateNote(
       `Path traversal detected: resolved path "${resolvedFilePath}" is outside vault root "${resolvedVaultRoot}".`,
     );
   }
+  // Symlink-safe re-check on the containing directory (which exists): the string check
+  // above does not follow symlinks, so a symlinked directory could redirect the write out.
+  assertInsideVault(dirname(resolvedFilePath), resolvedVaultRoot, `document path "${doc.path}"`);
 
   // --- Guards (same two content guards as writeNote; no title here) ---
   assertNoSecrets(content);
