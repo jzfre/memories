@@ -50,12 +50,37 @@ describe('live Markdown access', () => {
     expect((await store.list())[0].title).toBe('Updated');
   });
 
+  it('extracts note links while excluding inline and fenced code', async () => {
+    const content = [
+      '[[Family#People|rodina]] ![[Embedded.md]] [plan](Plans.md "A title")',
+      '[space](<Space Note.md>) [encoded](Space%20Note.md#Heading)',
+      '[web](https://example.com) ![image](photo.png) [[#Local]]',
+      '`[[Inline]]` `[sample](Example.md)`',
+      '````typescript', '[[Code]]', '```', '[[Still code]]', '`````',
+      '[[After code]]', '~~~', '[hidden](Hidden.md)', '~~~',
+      '[broken [[Recovered]]', '```', '[[Unclosed code]]',
+    ].join('\n');
+    await writeFile(join(root, 'Links.md'), content);
+    expect((await store.read('Links.md')).links).toEqual([
+      'Family', 'Embedded.md', 'After code', 'Recovered', 'Plans.md', 'Space Note.md',
+    ]);
+  });
+
   it('reads malformed frontmatter as content without executing language directives', async () => {
     const content = '---js\nthrow new Error("must not execute")\n---\n# Plain';
     await writeFile(join(root, 'Plain.md'), content);
     expect((await store.read('Plain.md')).content).toBe(content);
     await writeFile(join(root, 'Plain.md'), '---\naliases: [broken\n---\n# Fallback');
     expect((await store.read('Plain.md')).title).toBe('Fallback');
+  });
+
+  it.each([
+    ['# Title with spaces ###\r\nBody', 'Title with spaces'],
+    ['#   \n# Next heading\nBody', 'Next heading'],
+    ['No heading\n## Subheading', 'Heading'],
+  ])('reads a usable heading or falls back to the filename', async (content, title) => {
+    await writeFile(join(root, 'Heading.md'), content);
+    expect((await store.read('Heading.md')).title).toBe(title);
   });
 
   it('ranks Slovak titles and aliases above body-only matches and limits snippets', async () => {
@@ -72,6 +97,32 @@ describe('live Markdown access', () => {
 });
 
 describe('containment and bounds', () => {
+  it('processes allowed-size malformed Markdown within a bounded child process', async () => {
+    const source = new URL('../src/vault.ts', import.meta.url).href;
+    const command = `
+      import { VaultStore } from ${JSON.stringify(source)};
+      import { writeFile } from 'node:fs/promises';
+      import { join } from 'node:path';
+      const store = new VaultStore(process.env.TEST_VAULT, process.env.TEST_STATE);
+      const cases = ['['.repeat(500_000), '[]('.repeat(160_000), ' '.repeat(500_000),
+        '[x](<'.repeat(100_000), '[x](target "'.repeat(40_000),
+        '# ' + ' '.repeat(500_000), '# x' + ' '.repeat(500_000) + '!',
+        ' \\n'.repeat(200_000), ('~~~\\n' + ' '.repeat(100) + '\\n').repeat(4_000)];
+      for (const content of cases) {
+        await writeFile(join(process.env.TEST_VAULT, 'Imported.md'), content);
+        await store.read('Imported.md');
+        await store.write('Written.md', content);
+      }
+      process.stdout.write('completed');
+    `;
+    const result = await promisify(execFile)(process.execPath,
+      ['--import', 'tsx', '--input-type=module', '-e', command], {
+        env: { ...process.env, TEST_VAULT: root, TEST_STATE: state },
+        timeout: 4_000, killSignal: 'SIGKILL',
+      });
+    expect(result.stdout).toBe('completed');
+  }, 6_000);
+
   it.each(['../escape.md', 'a/../escape.md', '/absolute.md', '.obsidian/note.md', 'dir/.secret.md', 'a\\b.md', 'C:/file.md', 'a\u0000.md', 'note.txt'])('rejects unsafe path %j for reads and writes', async path => {
     await expect(store.read(path)).rejects.toMatchObject({ code: 'INVALID_PATH' });
     await expect(store.write(path, 'content')).rejects.toMatchObject({ code: 'INVALID_PATH' });

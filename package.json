@@ -1,35 +1,19 @@
 {
   "name": "memories",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "db:up": "docker compose up -d db",
-    "db:down": "docker compose down",
-    "generate": "pnpm --filter @memories/memory-gateway db:generate",
-    "migrate": "pnpm --filter @memories/memory-gateway db:migrate",
-    "scan": "pnpm --filter @memories/memory-server maintenance",
-    "reembed": "pnpm --filter @memories/memory-gateway reembed",
-    "rebuild": "pnpm --filter @memories/memory-gateway rebuild",
-    "status": "pnpm --filter @memories/memory-server maintenance",
-    "audit:search": "pnpm --filter @memories/memory-gateway audit:search",
-    "api": "pnpm --filter @memories/memory-gateway api",
     "mcp": "pnpm --filter @memories/memory-server mcp",
     "mcp:http": "pnpm --filter @memories/memory-server start",
+    "maintenance": "pnpm --filter @memories/memory-server maintenance",
     "test": "pnpm --filter @memories/memory-server test",
     "typecheck": "pnpm --filter @memories/memory-server typecheck",
-    "legacy:scan": "pnpm --filter @memories/memory-gateway scan",
-    "legacy:status": "pnpm --filter @memories/memory-gateway status",
-    "legacy:mcp": "pnpm --filter @memories/memory-gateway mcp",
-    "legacy:mcp:http": "pnpm --filter @memories/memory-gateway mcp:http",
-    "legacy:test": "pnpm -r test",
-    "legacy:typecheck": "pnpm -r typecheck",
-    "build": "pnpm --filter @memories/memory-server build"
+    "build": "pnpm --filter @memories/memory-server build",
+    "test:compiled": "node apps/memory-server/tests/compiled-smoke.mjs"
   },
-  "devDependencies": {
-    "typescript": "^5.6.0"
-  }
+  "packageManager": "pnpm@9.15.9"
 }

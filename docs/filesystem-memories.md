@@ -1,110 +1,84 @@
-# Filesystem Memories
+# Architecture and operation
 
-The September 2026 runtime makes the vault extended context for the owner's AI clients. Ordinary Markdown is durable knowledge. The MCP server reads current files, and ChatGPT/Codex does research and synthesis. PostgreSQL, embeddings, sensitivity scopes and a mandatory note protocol are absent from this runtime.
-
-## Components
+The Markdown vault is the knowledge base. The Mac uses Obsidian desktop Sync; Rocinante uses official Headless Sync and runs Memories against its local copy. The initial server copy must come from the current Mac vault. After verification, changes travel in both directions.
 
 ```mermaid
 flowchart LR
-  Mac[Mac Obsidian vault] <-->|Official Obsidian Sync| Remote[Encrypted Sync remote vault]
-  Remote <-->|Official Headless Sync| Roci[Rocinante Markdown vault]
-  Codex[Codex: connected] -->|Authenticated HTTPS MCP| Tunnel[Cloudflare Tunnel]
-  Chat[ChatGPT: connection pending] -.->|Authenticated HTTPS MCP| Tunnel
-  Tunnel --> MCP[Memories on Rocinante]
-  Local[Optional local agents] -.->|stdio MCP| Mac
-  MCP <--> Roci
-  MCP --> State[History and derived navigation outside Sync]
+  Mac[Mac Obsidian vault] <-->|Obsidian Sync| Remote[Encrypted remote vault]
+  Remote <-->|Headless Sync| Vault[Rocinante Markdown vault]
+  Clients[Codex and authorized MCP clients] -->|HTTPS| Tunnel[Cloudflare Tunnel]
+  Tunnel -->|Loopback HTTP| MCP[Memories]
+  MCP <--> Vault
+  MCP --> State[Private history and maintenance state]
 ```
 
-Solid connections are deployed and verified on 2026-09-13. Codex uses the remote server on Rocinante. ChatGPT's separate connection remains pending. A local agent can also run the filesystem MCP against its local synced copy through stdio; clients see the same notes after synchronization.
+Rocinante serves `https://mcp.aqui.technology/mcp`. Codex is connected. The separate ChatGPT web connection remains pending until authentication, tool discovery and a real retrieval are verified in that client. There is no Obsidian desktop process on Rocinante. Official Headless is currently in open beta. See [Obsidian Headless](https://obsidian.md/help/headless) and [Headless Sync](https://obsidian.md/help/sync/headless).
 
-For a normal question, the AI client calls `kb_peek`, searches the topic and fetches useful notes, then researches and answers using that context. Useful new facts and corrections go back into ordinary Markdown through `kb_edit` or `kb_write`. The server saves the previous version on Rocinante, and Obsidian Sync carries the updated note to the Mac. Human edits in Mac Obsidian travel in the other direction. The server runs storage and search; the connected AI client supplies reasoning.
+## Client workflow and tools
 
-| Tool | Behavior |
+For a question involving the owner's life, projects or prior decisions, start with `kb_peek`, search the topic, then fetch the useful notes. Verify facts that may have changed. Save lasting findings and corrections in the relevant notes, retaining sources and uncertainty. The [client skill](../skills/using-memories/SKILL.md) and MCP initialization instructions describe this behavior; the server cannot force every model to retrieve on every turn.
+
+| Tool | Operation |
 |---|---|
-| `kb_peek(topic?)` | Topic matches, recent notes, folder counts and maintenance summary |
-| `search(query)` | Accent-insensitive lexical search of title, path, aliases, tags and content |
-| `fetch(id)` | Complete current note and full-file SHA256 |
-| `kb_write(path,content,expected_hash?)` | Create or replace normal Markdown; preserve the old version |
-| `kb_edit(path,find,replace,expected_hash?)` | Replace exactly one text occurrence; preserve the rest |
+| `kb_peek(topic?, limit?)` | Relevant snippets, recent notes, folder counts and maintenance summary |
+| `search(query, limit?)` | Ranked lexical search across titles, paths, aliases, tags and note text |
+| `fetch(id)` | Complete current note, metadata and full-file SHA-256; `id` is its relative path |
+| `kb_write(path, content, expected_hash?)` | Create or replace Markdown, preserving an existing version |
+| `kb_edit(path, find, replace, expected_hash?)` | Replace exactly one occurrence, preserving the rest of the note |
 | `kb_history(path)` | List previous MCP versions |
-| `kb_restore(path,version)` | Restore a saved version, preserving the current version first |
-| `kb_maintenance()` | Refresh links, duplicates, changed files and navigation reports |
+| `kb_restore(path, version)` | Restore a version, saving the current content first |
+| `kb_maintenance()` | Refresh changed-file, duplicate, link and navigation reports |
 
-`memories://overview` exposes bounded Markdown navigation. Search uses all supplied keywords, so use short topic phrases and separate searches for alternate names. It does not provide semantic/vector search. Reads are immediate; a scan is unnecessary for search freshness.
+The `memories://overview` resource provides bounded Markdown navigation.
 
-Visible `.md` files are supported. Optional frontmatter is read for metadata and otherwise preserved exactly. Hidden files, symlinks, traversal paths and files above 2 MiB are rejected. This is file containment, not a content or sensitivity policy. Authentication grants access to the owner's whole visible Markdown vault.
+Search is accent-insensitive and requires every supplied keyword to match somewhere in a note's searchable fields. Use short topic phrases; try alternate names in separate searches. Results contain bounded snippets; fetch the note before relying on details or editing it. Search reads current files directly and needs no maintenance scan to become fresh.
 
-## Client behavior and cleanup
+Optional YAML frontmatter supplies title, tags and aliases. Ordinary Markdown without frontmatter works too. Writes preserve the content supplied by the client without imposing a note template.
 
-The installed `using-memories` skill starts relevant personal questions with KB context and encourages lasting, sourced updates during the owner's memory workflow. It avoids redundant notes and preserves uncertainty. The MCP server also advertises this workflow in its initialization instructions and tool descriptions. Neither mechanism can force every model to retrieve on every turn, or access unrelated conversations.
+## Configuration and access
 
-The HTTP process runs deterministic maintenance every 15 minutes. It stores full-file change hashes, deletion tracking, exact duplicate groups, broken/ambiguous links and a navigation overview outside the vault. Each scan reads the current collection; change tracking identifies incremental work, it is not an incremental filesystem index. Stdio clients can refresh through `kb_maintenance`.
+| Variable | Purpose | Default |
+|---|---|---|
+| `MEMORIES_VAULT` | Absolute local vault path | Required |
+| `MEMORIES_STATE` | Private state directory outside the vault | `~/.local/state/memories` |
+| `MEMORIES_TOKEN` | HTTP bearer credential; runtime requires at least 32 bytes, deployment generates 32 random bytes | Required for HTTP |
+| `MEMORIES_PORT` | Loopback HTTP port | `3333` |
+| `MEMORIES_CAPABILITY_URL` | Allow a credential-bearing URL for clients without custom headers | `false` |
+| `MEMORIES_MAINTENANCE_SECONDS` | HTTP maintenance interval, at least 10 seconds | `900` |
 
-Semantic cleanup happens in the active AI client: use the report, read the affected notes, repair unambiguous links and consolidate summaries while preserving original sources and unique details. No independent model job, paid API call or daily automation is configured. The server cannot wake ChatGPT itself. This borrows LLM Wiki's useful patterns—change hashes, link analysis and derived navigation—without its plugin UI, model framework or automatic source rewrites. No upstream source code was copied.
+The runtime reads environment variables from its process; it does not load a `.env` file automatically. The systemd deployment uses a private `EnvironmentFile`.
 
-## Run and verify
+HTTP uses `Authorization: Bearer <token>` at `/mcp`. The listener binds loopback and public access goes through HTTPS. Requests with a browser `Origin` header are rejected. Direct browser JavaScript is not a supported client transport. The HTTP service accepts JSON POST requests with bodies smaller than 3 MiB.
 
-Requires Node 22+ and pnpm 9.15.9. From the repository root:
+When explicitly enabled, capability mode also accepts `/<token>/mcp`. The entire URL is a credential. Keep it in private client configuration, never in a note, log, screenshot or repository. This service does not implement an OAuth sign-in flow.
+
+There is one HTTP credential and one visible Markdown vault. Every authenticated client has the same tool access; rotating the credential invalidates all clients using it. Stdio access uses the permissions of the local account that starts the process, so it needs no bearer header. A cloud service must reach the HTTPS endpoint rather than a local stdio process.
+
+## Writes, recovery and limits
+
+- Paths are vault-relative and end in `.md`. Hidden paths, traversal, symlinks, non-regular files and notes larger than 2 MiB are rejected.
+- Read the note first and pass its SHA-256 as `expected_hash` when updating. An empty hash means create only. A conflict means fetch again and reconcile the change. `kb_edit` also checks the version it read internally.
+- Writes use a temporary file and atomic rename. Existing content is saved outside the synced vault before an MCP replacement or restoration.
+- Every MCP writer for a vault on one host must share `MEMORIES_STATE`. Its process-owned lock serializes writes and can recover a dead owner. A live owner is never cleared automatically. An ownerless or unrecognized lock fails after 15 seconds and requires operator inspection.
+- External editors and Sync do not acquire that lock. Hash checks detect observed intervening changes, but the final compare and rename are not a transaction shared with those applications. Keep conflict copies and recoverable history.
+
+MCP history covers MCP changes, not every edit by another application. Back up the complete vault and private state independently, retain Obsidian version history, and verify restoration. Sync propagates deletions as well as edits. Runtime state contains previous note content and requires the same privacy as the vault.
+
+## Maintenance
+
+The HTTP process refreshes reports at startup and every 15 minutes by default. `pnpm maintenance` or `kb_maintenance` refreshes them on demand. Reports contain changed and deleted paths, exact duplicate groups, broken or ambiguous links, notes without incoming links, and a navigation summary. Each refresh reads the current collection; hashes identify changes between runs.
+
+Maintenance does not merge or delete source notes. An unlinked note is not automatically obsolete, and a broken-link report needs context before repair. The connected AI client can use these reports to consolidate related findings and repair links while preserving sources and unique details. No independent model job or scheduled semantic rewriting is configured; the server does not wake ChatGPT.
+
+## Verification
+
+From the repository root:
 
 ```sh
-pnpm install --filter @memories/memory-server... --frozen-lockfile
-pnpm build
 pnpm test
 pnpm typecheck
-cd apps/memory-server
-node tests/compiled-smoke.mjs
+pnpm build
+pnpm test:compiled
 ```
 
-Set `MEMORIES_VAULT` to the local vault and `MEMORIES_STATE` to a private directory outside it. `pnpm mcp` starts stdio. `pnpm mcp:http` starts loopback HTTP, requiring `MEMORIES_TOKEN` of at least 32 bytes. `MEMORIES_PORT` defaults to 3333 and `MEMORIES_MAINTENANCE_SECONDS` to 900.
-
-HTTP accepts bearer authentication at `/mcp`. Optional `MEMORIES_CAPABILITY_URL=true` permits the exact `/<token>/mcp` URL for clients that cannot send headers. The complete capability URL is a credential: store it privately in the client, never in Markdown, logs or reports. Browser-origin requests are rejected. Public HTTPS goes through a local reverse proxy such as the installed Cloudflare Tunnel. This runtime does not implement OAuth.
-
-[Systemd deployment and rollback](../deploy/README.md) describes service installation. The service uses an ordinary unprivileged user and a read-only filesystem except its vault, state and private temporary space.
-
-History snapshots and derived state live outside Obsidian Sync. Back up that state separately. MCP history covers MCP changes, not every edit made by Obsidian or another application. Retain independent vault backups and Obsidian version history. Sync replicates deletion too; it is not an independent backup.
-
-Every MCP writer on one host must use the same state directory. Its PID-owned lock serializes writes across processes and recovers dead owners. An ownerless/unrecognized lock fails after 15 seconds and requires inspection; never remove a live owner's lock. External editors and Sync do not participate in that lock. Full-file hashes detect observed intervening changes, but a filesystem compare followed by rename is not a transaction shared with Sync.
-
-## Official Sync cutover
-
-1. Keep a verified backup of the current Mac vault and old Sync configuration.
-2. Sign into Obsidian on Mac and activate an existing Sync subscription. No subscription purchase has been made by this task.
-3. Pause only the old Syncthing vault folder before connecting the new replication service. Do not disrupt other folders.
-4. Seed a new/verified empty remote vault from the current Mac. Confirm account, vault identity and encryption before connecting an existing remote vault that could hold stale content.
-5. On Rocinante, sign into `ob login`, inspect `ob sync-list-remote --json`, and configure the verified remote vault using `ob sync-setup --vault <verified-id> --path /home/jzfre/memories-vault --device-name rocinante`. Enter any encryption password interactively.
-6. Complete an initial `ob sync`; compare relative paths and SHA256 of all Markdown files with the current Mac. Verify attachments separately according to the chosen Sync configuration. Exclude `.git`, private settings and runtime state from data replication.
-7. Test a unique temporary note Mac → server, edit through MCP and verify server → Mac, then test deletion propagation. Remove the test note and preserve useful test evidence outside the vault.
-8. Enable continuous Headless Sync with user lingering, then activate Memories and authenticated public routing. Restart both services and verify that synchronization and MCP reads still work.
-9. Retire the old vault replication after the verified cutover; retain its configuration backup.
-
-Never run desktop Sync and Headless Sync on the same device/vault. The Mac uses desktop Obsidian; Rocinante uses Headless Sync.
-
-## Deployment record: 2026-09-13
-
-- Codex is configured as `memories` using authenticated streamable HTTP to Rocinante. The installed Codex app-server discovered all eight tools, and the active Codex conversation successfully called `kb_peek`, `search` and `fetch`. This replaces the earlier local stdio configuration; the optional local runtime and its previous history at `/Users/jzfre/.local/state/memories` remain available.
-- The new client skill is installed through the existing repository symlink. A fresh read-only Codex session implicitly invoked `kb_peek`, `search` and six `fetch` calls for a Rocinante question; its answer cited a retrieved rebuild note. No write tools were invoked.
-- Initial local maintenance found 71 notes, zero exact duplicates/broken/ambiguous links and five notes without incoming links. An unlinked note is not automatically obsolete. The live vault subsequently grew to 72 notes.
-- Rocinante runs Node 22.22.1 and official `obsidian-headless` 0.0.14. The end-to-end encrypted remote vault is `sovereign`, ID `87d1c8808f0481e74f8dd830c8419500`, North America. Its 72 visible files were initially downloaded in pull-only mode and matched the Mac by SHA256.
-- Headless now runs continuously in bidirectional mode with conflict copies and no configuration sync. Its user service is enabled and lingering is on. Mac create/server edit, creation in the other direction, and deletions in both directions passed using a temporary note that was removed afterward.
-- Homebrew Syncthing is stopped on Mac; `syncthing@jzfre.service` is inactive/disabled on Rocinante. Existing configuration and encrypted backups are retained.
-- Production `memories.service` is active/enabled. It binds only `127.0.0.1:3333`; Cloudflare publishes `mcp.aqui.technology`. Live public HTTPS checks passed 401 without credentials, bearer and capability authentication, eight-tool discovery, search/fetch/create/edit/history, and exact-content restore after an actual service restart.
-- Both production services were restarted. The restored verification note reached the Mac after exceeding the first 45-second wait; its contents were verified and it was then removed from both replicas. No cause was established for that delivery delay.
-- The final 20-file application/config/unit manifest matched Mac and Rocinante: SHA256 `6f7363731fb93bfe554005377e4e7a29645681f00eed9df44fd81fbe2ff7e757`.
-- A subsequent test-only continuation added capability-URL and startup-boundary coverage: 48 tests pass locally; the five HTTP tests and typecheck also pass on Rocinante. The earlier manifest is the initial staged snapshot, before this additional test file update. Runtime source is unchanged.
-- Cloudflare MCP DNS now targets the Rocinante tunnel. `memories.aqui.technology`, the older web-editor hostname, was not migrated. The actual ChatGPT connection refresh and client test remain pending; the private connection URL is stored outside the vault in the owner's client configuration directory.
-- Current architecture, retired protocol status and implementation evidence were written to four existing vault notes through MCP, with original-version history and readback verified.
-- A fresh encrypted vault-and-history backup was decrypted/read successfully (143 regular files) and copied identically to Rocinante: `/Users/jzfre/.local/share/memories-backups/20260913T070239Z-filesystem-memories.tar.age`, SHA256 `4b677985405c0794760f69d78ce4f6f93dbe011c9fe5dce28483e15116d562f1`. Remote directory: `/home/jzfre/.local/share/memories-backups/`.
-- Before the authorized encryption reset, another verified temporary copy and encrypted archive were created: `20260913T130210Z-before-sync-reset.tar.age`, SHA256 `c94feac5c1cca49c25a7adb2a4b4fada16adb6e93506b2c8e933394d892a95a1`. The archive includes the complete local vault, local MCP history/state and old Syncthing configuration; its remote copy is identical.
-- The post-activation backup `20260913T182554Z-memories-live.tar.age` contains 138 regular vault files, including 72 visible Markdown notes, plus local MCP history/state. Decryption and vault hashes were verified, as was the identical Rocinante copy; SHA256 `980491f045f606b8dce47d1c9880f2b844eb4efd252b3cddaa13d88ea176eb72`.
-- Before publishing the repository, fresh checks passed all 48 filesystem-runtime tests, typecheck, build and the compiled create/edit/restart/restore smoke test. The Mac and Rocinante still matched on all 72 visible Markdown files. Memories, Headless Sync and cloudflared were active/enabled; Syncthing remained stopped on both hosts.
-
-## References
-
-- [Official Obsidian Headless](https://obsidian.md/help/headless)
-- [Official Headless Sync](https://obsidian.md/help/sync/headless)
-- [Obsidian Headless source](https://github.com/obsidianmd/obsidian-headless)
-- [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
-- [Codex MCP configuration and server instructions](https://developers.openai.com/codex/mcp)
-- [ChatGPT plugin connection](https://developers.openai.com/plugins/deploy/connect-chatgpt)
-- [LLM Wiki source and design patterns](https://github.com/gd4ai/obsidian-llm-wiki)
+Tests use temporary vaults. Before activating or upgrading a deployment, also verify unauthenticated denial, authenticated tool discovery, search/fetch, a temporary-note edit, restoration after service restart, and synchronization in both directions. The [deployment guide](../deploy/README.md) covers service configuration and recovery.

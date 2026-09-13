@@ -4,6 +4,7 @@ import { lstat, mkdir, open, readdir, realpath, rename, rmdir, unlink } from 'no
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parse as parseYaml } from 'yaml';
+import { markdownLinks, markdownTitle } from './markdown.js';
 
 export type Note = {
   path: string;
@@ -133,7 +134,7 @@ function noteFrom(path: string, content: string, modifiedAt: number): Note {
   }
   const body = header ? content.slice(header[0].length) : content;
   const title = typeof data.title === 'string' && data.title.trim()
-    ? data.title.trim() : /^#\s+(.+?)\s*#*\s*$/m.exec(body)?.[1] ?? basename(path, '.md');
+    ? data.title.trim() : markdownTitle(body) ?? basename(path, '.md');
   const links = new Set<string>();
   const addLink = (raw: string): void => {
     let target = raw.split('|')[0]!.split('#')[0]!.trim();
@@ -142,10 +143,7 @@ function noteFrom(path: string, content: string, modifiedAt: number): Note {
     if (/\.[a-z0-9]+$/i.test(target) && !/\.md$/i.test(target)) return;
     links.add(target);
   };
-  // Code samples are not links in the vault's knowledge graph.
-  const prose = body.replace(/^\s*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\s*\1\s*$/gm, '').replace(/`[^`\n]*`/g, '');
-  for (const match of prose.matchAll(/!?\[\[([^\]\n]+)\]\]/g)) addLink(match[1]!);
-  for (const match of prose.matchAll(/!?\[[^\]\n]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+"[^"]*")?\s*\)/g)) addLink(match[1] ?? match[2]!);
+  for (const target of markdownLinks(body)) addLink(target);
   return { path, title, content, hash: hash(content), modifiedAt,
     tags: strings(data.tags ?? data.tag), aliases: strings(data.aliases ?? data.alias), links: [...links] };
 }

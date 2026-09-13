@@ -13,6 +13,6 @@ As part of the owner's authorized memory workflow, save durable decisions, verif
 
 While working on a topic, use `kb_maintenance` when cleanup would help. Repair clearly identifiable links and consolidate redundant summaries while retaining original sources and unique details. Flag ambiguous contradictions instead of inventing a resolution. `kb_history` and `kb_restore` recover earlier MCP edits.
 
-Prefer the configured filesystem Memories server over legacy indexed tools. No protocol, namespace filter, embedding refresh or frontmatter schema is required. If MCP is unavailable, use `/Users/jzfre/Documents/Obsidian Vault` directly and make an external backup before replacing content. If neither is accessible, state that limitation.
+Use the configured Memories MCP server to search current Markdown files and edit ordinary notes. Search matches keywords across note titles, paths, aliases, tags and content, including names with accents. If MCP is unavailable, use `/Users/jzfre/Documents/Obsidian Vault` directly and make an external backup before replacing content. If neither is accessible, state that limitation.
 
 This skill guides the current client; it does not automatically run in unrelated ChatGPT conversations or gain access to other chat histories. A scheduled maintenance run is a separate configured job.

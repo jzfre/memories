@@ -78,8 +78,9 @@ describe('real HTTP MCP', () => {
     await store.write('Infra/Rocinante.md', '# Rocinante\n\nHeadless Ubuntu server.');
     const client = await connect(running.url);
     const tools = (await client.listTools()).tools.map(t => t.name);
-    expect(tools).toContain('kb_peek');
-    expect(tools).not.toContain('memory_protocol');
+    expect(tools.sort()).toEqual([
+      'fetch', 'kb_edit', 'kb_history', 'kb_maintenance', 'kb_peek', 'kb_restore', 'kb_write', 'search',
+    ]);
     const peek = data(await client.callTool({ name: 'kb_peek', arguments: { topic: 'Rocinante' } }));
     expect(peek.relevant[0].path).toBe('Infra/Rocinante.md');
     const overview = await client.readResource({ uri: 'memories://overview' });

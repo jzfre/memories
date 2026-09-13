@@ -1,90 +1,21 @@
-# Filesystem Memories implementation
+# Filesystem Memories
 
-## Asked
-- Implement the September 13 approved design: official Obsidian Sync/Headless Sync, direct Markdown MCP, memory-first client behavior and incremental self-cleaning.
-- Remove mandatory PostgreSQL/embeddings, namespace/sensitivity scoping, protocol calls and rigid note schemas from the new runtime. Keep authentication and recoverable history.
-- Seed from the current Mac vault. Never cut over replication until contents and both directions are verified.
+## Requested outcome
+- Serve the owner’s Markdown knowledge base through one authenticated MCP, with official Obsidian Sync between Mac and Rocinante. The AI client researches and maintains useful notes.
+- Remove all superseded code, configuration, commands, fixtures and documentation. Check the remaining security boundaries before the owner tests. Existing Git history preserves prior implementations.
 
-## Plan
-- [x] Add an independently runnable `apps/memory-server` TypeScript package, without database dependencies. Keep old code available as legacy during migration; switch root default commands after verification.
-- [x] Implement and test a filesystem store using real temporary directories: fresh reads/search, Markdown path containment, symlink rejection, atomic writes, content hashes and history outside the vault.
-- [x] Implement and test MCP peek/search/read/write/edit/history/restore plus authentication, payload limits and real HTTP lifecycle/restart tests.
-- [x] Implement and test maintenance: changed-file tracking, deterministic links/duplicate/drift reports and generated navigation. Semantic consolidation is performed by the configured active client skill; no independent model job is configured.
-- [x] Package a small client skill and connect the local service; verify indirect KB retrieval in a fresh Codex session and real writes/history/readback through MCP. Public ChatGPT is pending remote activation.
-- [x] Install official Node/Headless Sync on Rocinante, connect the owner's Obsidian account, seed and compare hashes, test edits in both directions, then retire old vault replication.
-- [x] Deploy the lightweight service with loopback listener, authenticated public routing and private access; verify remotely, restart and restore a test note.
-- [ ] Refresh the actual ChatGPT Memories connection and verify its new tools and retrieval in that client.
+## Current design
+- `apps/memory-server`: eight MCP tools, current-file keyword search, ordinary Markdown edits, private recoverable history, and deterministic maintenance every 15 minutes.
+- Codex connects through authenticated HTTPS and Cloudflare Tunnel to Rocinante. Optional stdio runs under the local OS account. The separate web ChatGPT connection is still pending login and client verification.
+- The Mac uses Obsidian desktop Sync; Rocinante uses official Headless Sync with a persistent user service and login linger. Markdown and credentials live outside this repository.
+- Runtime state stays outside Sync. On-host writers share its lock; external editors/Sync are not part of that transaction. Full-file hashes detect observed conflicts.
+- Path containment, no symlinks/hidden files, size limits, private state modes, token authentication, loopback HTTP and systemd restrictions remain required.
 
-## Interfaces and ownership
-- Filesystem store: `src/vault.ts`, `tests/vault.test.ts`; `VaultStore(root, stateDir)` exposes async `list`, `read(path)`, `search(query,limit)`, `write(path,content,expectedHash?)`, `remove(path,expectedHash?)`, `history(path)`, `restore(path,version)`.
-- Note: `{path,title,content,hash,modifiedAt,tags,aliases,links}`; times are epoch milliseconds, paths are vault-relative POSIX paths. SearchHit extends note metadata with snippet and score, omitting full content.
-- Maintenance: `src/maintenance.ts`, `tests/maintenance.test.ts`; `analyzeNotes(notes, previousHashes?)` returns changed/deleted paths, duplicate groups, broken/ambiguous links and orphan paths. The store owns all persistent writes; derived state lives outside the synced vault.
-- Parent owns package/config/entry points, MCP/HTTP, deploy files, worker orchestration, docs and integration checks. Agents do not edit shared package files or live vault/server state.
-
-## Constraints
-- User-authorized execution: no new design approval, review handoff, worktree, commit or push required.
-- Existing uncommitted README/DOCUMENTATION/skills/deploy files must be preserved and reconciled deliberately.
-- Test only temporary vaults; never run legacy truncating database tests against owner data.
-- Never print authentication/session secrets. No new paid purchase or credential extraction.
-
-## Evidence
-- Current local old runtime HEAD: `7bffde2e865cd8908868c245732ccc123a7351b3`.
-- Fresh SSH to Rocinante works. Tailscale, cloudflared and Syncthing services active; no host Node/npm/Headless Sync found.
-- Mac Node v24.16.0 available. No OPENAI_API_KEY in current environment; model-runner setup remains to establish.
-- 46 tests pass on Mac and Rocinante; typecheck/build pass; actual compiled stdio create/edit/restart/restore passes on both hosts.
-- Fresh ephemeral read-only Codex task implicitly selected `kb_peek`, `search` and six `fetch` calls; answer grounded in a retrieved migration note. No write calls.
-- Configured global Codex `memories` stdio against canonical Mac vault. Existing installed skill is a repository symlink; updated in place. Codex config and skill snapshot copied privately before `mcp add`.
-- Four existing vault notes updated through MCP; original history and readback verified. 71 notes, zero exact duplicates/broken/ambiguous links; five unlinked notes are not considered obsolete automatically.
-- Encrypted vault+history backup `20260913T070239Z-filesystem-memories.tar.age`: decrypt/read 143 regular files and identical remote SHA256 verified (`4b677985405c0794760f69d78ce4f6f93dbe011c9fe5dce28483e15116d562f1`).
-- Node22.22.1/npm9.2.0/pnpm9.15.9/ob0.0.14 installed on Rocinante; production Memories/Headless units remain disabled, target vault empty, pending user account login. No DNS/Sync cutover.
-- Remaining: user signs in to Obsidian on Mac with active Sync, then server `ob login`; verify remote identity/encryption, seed from Mac, compare hashes/round trips, activate services, publish authenticated MCP and refresh/test ChatGPT connector.
-- Linux systemd rehearsal using production hardening passed 401/auth/discovery/create/edit/history/restart/restore; temporary unit/env/fixture removed, ports3333/3334 closed. Production disabled/inactive. Final20-file source/config/unit manifest matches both hosts: `6f7363731fb93bfe554005377e4e7a29645681f00eed9df44fd81fbe2ff7e757`.
-
-## Continuation audit
-- Previous goal turn was progress: implemented/tested/staged the runtime and saved actual MCP edits plus encrypted backup. The goal remains incomplete because account authentication, real Sync round trips and public ChatGPT migration are missing.
-- Current continuation reverified Mac Obsidian signed out in UI; server auth file absent, `ob sync-list-remote --json` exit2 with login-required message; target still empty, production Memories inactive. This is the second consecutive goal turn with the same account blocker, not a running-process wait.
-- Closed a missing transport verification: capability URL works without bearer headers only when enabled; rejects malformed paths, query-token substitution, browser origins, wrong bearer, weak startup token and non-loopback bind. All48 tests pass locally; five HTTP tests and typecheck pass on Rocinante. No runtime source changed.
-- Remaining requirements still unproven: official Sync remote identity/encryption/seed, hash comparison and bidirectional edit/delete propagation, production service activation, authenticated HTTPS route and actual ChatGPT connector refresh/use. Account credentials/subscription cannot be inferred or replaced with a stale replica.
-- Cloudflare read-only DNS API confirmed both mcp/memories.aqui.technology still target the disconnected Eternity tunnel; Rocinante has four tunnel connections but only404ingress. Exact future MCP-only cutover/rollback documented in deploy/README.md; live routes untouched.
-- Third consecutive goal turn reverified the same account blocker: Mac UI explicitly signed out; Rocinante auth file absent, account command exit2/login-required, target0entries. Previous turn made progress through auth tests and DNS readiness; no live process is pending now. All remaining integration steps require user account authentication. Goal marked blocked rather than complete; resume after Mac Sync and server `ob login` are ready.
-
-## Account setup resumed
-- Owner completed both account logins. Server remote/local vault lists initially empty; Mac UI confirmed signed-in account. The owner then created and connected remote vault `sovereign`, ID `11dd24869284ae443d46683427c442f1`, region North America. Mac Sync activity log reached `Fully synced` at07:05local on2026-09-13. Visible source files are71Markdown notes.
-- Before new Sync began, archived current vault, MCP history/state and old Syncthing config; decrypted/read144regular files and verified identical Rocinante copy. Archive `20260913T120414Z-pre-obsidian-sync-cutover.tar.age`, SHA256 `810fdbae7b85d7b92a1f796f69454ac7436de9b3e1da881e7bba9794e84fce3e`, in existing private backup directories on both hosts.
-- Paused only the Mac Syncthing `memories-vault` folder via its local API and read back paused=true. No vault data removed. Full Syncthing service retirement awaits bidirectional Sync verification.
-- Server account login succeeds but vault setup needs the owner-created encryption password. Sent exact `ob sync-setup` command using verified remote ID with masked interactive prompt. Account token cannot substitute for vault decryption key. No secret extraction.
-- CUA blocks control of `com.openai.codex` for safety reasons. Public MCP can still be deployed/tested through SSH/HTTP, but updating the ChatGPT connection in that app may require user action after the endpoint is ready.
-- Cloudflare candidate and exact config/DNS rollback metadata staged privately on Rocinante at `/home/jzfre/.local/state/memories/cloudflare-cutover-20260913T120850Z`. Installed CLI validated MCP->127.0.0.1:3333 and fallback404. Live config/DNS/service remain unchanged pending synced vault and authenticated local MCP checks.
-
-## Encryption setup diagnostic
-- User supplied exact API rejection: `Wrong vault key, please try again.` Account login/basic HTTPS work; version3 encryption is supported by installed Headless0.0.14. User types the encryption password manually. No established cause yet.
-- Exact vendor password prompt reproduced input corruption with coalesced control characters and split UTF-8; ordinary manual input passed. This is a possible cause, not proof about the owner's password.
-- Prepared `/Users/jzfre/Documents/ChatGPT/Sovereign/infra/obsidian-sync-setup.py` for one owner-run retry: hidden local getpass, JSON over SSH stdin, official CLI password only in JavaScript memory. Verified four synthetic inputs across real SSH, including Unicode, spaces and shell metacharacters; refused non-interactive entry. No actual password handled, API attempted, or encryption/vault configuration changed by these tests. Await owner retry, then resume verified Sync cutover.
-- Owner retry exposed a helper bug: Commander auto-detects `node -e` and treated the extra script-path argument as a command. Removed that argument. Reproduced the original failure against the installed CLI, then verified the corrected helper reaches its actual `sync-setup` action with every network request blocked by a test stub; four CLI help cases also passed. Earlier transport-only verification missed the CLI parser. Actual password acceptance remains pending the owner's retry.
-- Owner reports corrected helper still rejects the password; live `ob sync-list-local --json` remains empty. The prompt workaround did not resolve setup. Stop repeated retries and establish whether this exact password was accepted by Mac's vault-unlock prompt or only account login/remote creation; do not infer password loss from a working cached Mac session or recreate the remote vault without resolving scope.
-
-## Authorized Sync reset
-- Owner confirmed it was the vault encryption password and explicitly requested a temporary backup and reset. Fresh private copy at `/Users/jzfre/.local/share/memories-backups/20260913T130210Z-before-sync-reset/vault` has137regular files/71visible Markdown notes; source and copy hashes match. Also copied local MCP history/state and Syncthing config. Mac Syncthing folder confirmed paused.
-- Encrypted archive `20260913T130210Z-before-sync-reset.tar.age` in both existing backup directories; SHA256 `c94feac5c1cca49c25a7adb2a4b4fada16adb6e93506b2c8e933394d892a95a1`. Decrypted archive and checked every vault file hash; remote encrypted bytes match. Verification manifest beside the temporary copy.
-- Mac was already disconnected from Sync. Obsidian UI confirmed only one remote-vault slot; deleted old `sovereign` after backup verification and observed `sovereign has been deleted`. Canonical Mac files retained. Prepared replacement form: name `sovereign`, North America, end-to-end encryption. Owner handoff pending new encryption password entry and Create submission, as required by computer-use credential policy.
-- Rocinante target remains empty0700, no local Headless configuration, both production units inactive/disabled. Retry helper now selects `sovereign` by unique name instead of the deleted ID. Verify replacement ID/encryption before initial pull-only sync, hash comparison and bidirectional round trips.
-- Owner replaced another newly created empty vault after recognizing a password typo. Final `sovereign` remote ID is `87d1c8808f0481e74f8dd830c8419500`, North America. Mac UI connected, Sync running, activity log `Fully synced` at10:55local on2026-09-13. Server remote list sees the new ID; local list remains empty. Requested owner run the tested hidden-input helper with the NEW encryption password; pending successful server setup. Current source hash manifest captured privately outside vault for comparison after download.
-
-## Live activation
-- Owner completed server encryption setup. Verified exact final vault ID, version3 E2EE, then configured pull-only/conflict/no-config-sync and downloaded the Mac vault. All72visible files matched by SHA256, with no missing/extra/different files. One-time CLI reached Fully synced/disconnected but retained a process; sent SIGINT to that exact completed process before starting continuous service.
-- Switched to bidirectional/conflict/no-config-sync, enabled user Headless service plus login linger. Actual temporary-note checks passed: Mac create->server, server edit->Mac, Mac delete->server, server create->Mac, server delete->Mac. Probe removed from both.
-- Retired old replication: Homebrew Syncthing stopped/status none; server syncthing@jzfre inactive/disabled. Kept old configuration and verified encrypted backups. Headless and Memories services both active/enabled, linger=yes, MCP listens only127.0.0.1:3333. Local HTTP verifies401 without auth/with wrong token, eight tools and72-note peek.
-- Prepared private ChatGPT connection URL in `/Users/jzfre/.config/memories/chatgpt-connection.txt`,0600; token not printed. Public routing and public write/restart/restore verification still pending.
-- Cloudflare active config and DNS matched staged rollback before mutation. Installed validated candidate and moved only `mcp.aqui.technology` CNAME to Rocinante. Live public HTTPS from Mac passed401 unauthenticated, bearer/capability authentication,8tools,search/fetch/create/edit/history. Restarted Memories and Headless services, then restored exact original content from persistent history through public MCP.
-- The Mac did not receive the final restored probe within45seconds, then caught up; exact hash matched and probe deletion propagated to both hosts. No cause established for that delay. Final72-file manifests match, including the updated Memories deployment note. Live public maintenance passed with0duplicates/0broken/0ambiguous links.
-- Fresh post-activation archive `20260913T182554Z-memories-live.tar.age` contains current Mac vault (138regular files/72visible Markdown notes) plus local MCP history/state. Decrypted and checked every vault hash; identical Rocinante archive. SHA256 `980491f045f606b8dce47d1c9880f2b844eb4efd252b3cddaa13d88ea176eb72`.
-- Actual ChatGPT connection remains the final handoff: owner asked to replace its URL from the private client file and refresh tools. Desktop app automated access is blocked. Public SDK verification is complete but does not claim actual ChatGPT retrieval. No commits or pushes.
-- Owner explicitly asked the agent to perform the ChatGPT plugin change. Plugin-management tools cannot edit MCP connection URLs. Browser alternative is accessible: opened `https://chatgpt.com/plugins` in in-app browser2/tab1 and displayed sign-in dialog. Browser is signed out; owner login requested. Tab marked for handoff. After login, inspect existing Memories and edit its URL if available; otherwise connect/verify a replacement before disabling the old connection. No plugin connection or permission changes yet.
-- Owner then supplied the capability URL and asked the agent to complete the MCP settings shown in a Codex screenshot. Fresh user config had no `memories` entry. Added only `[mcp_servers.memories].url` as streamable HTTP, preserving every other setting; private0600 config backup at `/Users/jzfre/.local/state/memories/config-backups/20260913T203025Z-before-remote-mcp.toml`. URL remains private and is not recorded here. This now uses Rocinante instead of the earlier local stdio configuration.
-- Actual installed Codex app-server initialized the remote `memories` connection and discovered all eight expected tools; `codex mcp get` also confirmed enabled HTTP configuration and exact private URL. Independent SDK initialize/list/peek succeeded with72notes. No extra OAuth/header/environment settings are needed for capability authentication. Existing desktop sessions may need a fresh conversation to load tools. The separate web ChatGPT plugin remains pending browser sign-in; this Codex configuration does not claim that connection was updated.
-
-## Repository publication
-- Owner requested a recap and explicitly authorized committing/pushing the completed work to origin. Origin is `https://github.com/jzfre/memories.git`; current branch is `main`. A fresh fetch found no divergence from `origin/main` before the publication commit.
-- Updated the architecture diagram and deployment record for Codex's remote connection; this active conversation successfully used `kb_peek`, `search` and `fetch`. Added the deployed Headless Sync user unit and installation steps; its bytes match the active server unit. Marked the earlier Docker/Postgres/Ollama restore scaffolding as legacy.
-- Fresh publication checks: all48tests, typecheck, build, compiled create/edit/restart/restore smoke and `git diff --check` passed. All72visible Markdown file hashes match across Mac/Rocinante. Memories, Headless and cloudflared are active/enabled; Syncthing is stopped on both. The29candidate files contain no known private MCP credential, private-key marker, provider-token pattern or private backup/database artifact.
-- Publish the runtime, client skill, deployment templates and documentation together. Private vault content, authentication, client configuration, history and backups remain outside the code repository. Separate ChatGPT connection and its memory-first behavior remain pending sign-in and client verification.
+## Cleanup and security verification — 2026-09-13
+- Kept only the current runtime, its fixture-based tests, client skill, service templates and concise operating guides. Reduced the workspace and lockfile to current dependencies.
+- Independent source review found one availability issue: overlapping Markdown regexes could stall the shared event loop on an allowed-size note. Replaced link, fence and heading extraction with forward-only parsing. Child-process regressions reproduced the old stalls and now complete within the enforced four-second limit; valid metadata and code exclusion are covered.
+- Updated compatible runtime dependencies and moved to patched Vitest 4.1.11 with its explicit Vite 6.4.3 peer. Production dependency advisories fell from 28 to zero; the full audit fell from 40 to zero. External Cloudflare/Obsidian implementations were outside the source audit.
+- Fresh frozen installs, all 53 tests, typecheck, build and compiled create/edit/restart/restore smoke passed on Mac Node 24.16.0 and Rocinante Node 22.22.1. The server's adversarial fixture test completed in 546 ms.
+- Deployed a fresh build on Rocinante, retaining the previous application privately for rollback. All 72 visible Markdown hashes, existing history and credential-file contents were unchanged by deployment. Both MCP and Headless Sync remain active/enabled.
+- Live public HTTPS checks passed authentication rejection (401), browser-origin rejection (403), method restriction (405), exact eight-tool discovery, keyword retrieval and full-note fetch. HTTP remains bound only to loopback.
+- Encrypted independent vault backups were previously decrypted and compared with their Rocinante copies. Backup files, audit artifacts and credentials remain outside the repository.

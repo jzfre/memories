@@ -10,12 +10,7 @@ build/
 # Env & secrets
 .env
 .env.*
-!.env.example
 .npmrc
-!.npmrc.example
-
-# Prisma
-prisma/*.db
 
 # OS / editor
 .DS_Store
