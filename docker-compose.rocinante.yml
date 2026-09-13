@@ -1,0 +1,81 @@
+# Legacy database/embedding gateway restore option; not the active deployment.
+# Current filesystem MCP and official Headless Sync: deploy/README.md.
+services:
+  memories-db:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    environment:
+      POSTGRES_USER: memories
+      POSTGRES_PASSWORD: ${MEMORIES_DB_PASSWORD:?set a URL-safe MEMORIES_DB_PASSWORD in .env}
+      POSTGRES_DB: memories
+    volumes:
+      - memories_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memories -d memories"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    # CPU only: no GPU devices or GPU reservations; available only inside Compose.
+    volumes:
+      - memories_ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/memory-gateway/Dockerfile
+    user: "1000:1000"
+    depends_on:
+      memories-db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      HOME: /tmp
+      DATABASE_URL: postgresql://memories:${MEMORIES_DB_PASSWORD:?set MEMORIES_DB_PASSWORD in .env}@memories-db:5432/memories
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_HTTP_PORT: "8788"
+      MCP_HTTP_TOKEN: ${MCP_HTTP_TOKEN:?set MCP_HTTP_TOKEN in .env}
+      MCP_HTTP_PUBLIC_BASE_URL: ${MCP_HTTP_PUBLIC_BASE_URL:-}
+      MEMORIES_CONFIG: /app/config.rocinante.yaml
+      VAULT_ROOT: /vault
+      EMBEDDINGS_ENABLED: "true"
+      EMBEDDINGS_URL: http://ollama:11434/v1
+      EMBEDDINGS_MODEL: nomic-embed-text:v1.5
+      EMBEDDINGS_DIM: "768"
+    volumes:
+      - type: bind
+        source: ${VAULT_HOST_PATH:?set VAULT_HOST_PATH to the seeded Rocinante vault}
+        target: /vault
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config.rocinante.yaml
+        target: /app/config.rocinante.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8788:8788"
+    # Use installed binaries directly; the image's Corepack cache belongs to root.
+    # Pull and warm the Ollama model before the gateway's first startup scan.
+    command:
+      - sh
+      - -c
+      - >-
+        ./node_modules/.bin/prisma migrate deploy &&
+        ./node_modules/.bin/tsx src/cli/index.ts scan &&
+        exec ./node_modules/.bin/tsx src/mcp/http.ts
+    restart: unless-stopped
+
+volumes:
+  memories_pgdata:
+  memories_ollama:

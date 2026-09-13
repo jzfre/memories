@@ -1,0 +1,13 @@
+interface:
+  display_name: "Using Memories"
+  short_description: "Recall and maintain your second brain"
+  default_prompt: "Use $using-memories to answer this using relevant context from my second brain."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "memories"
+      description: "Memories MCP server for searching, fetching, contextualizing, and maintaining the canonical vault."
+
+policy:
+  allow_implicit_invocation: true

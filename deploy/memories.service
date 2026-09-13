@@ -1,0 +1,32 @@
+[Unit]
+Description=Memories filesystem MCP server
+After=network.target
+
+[Service]
+Type=simple
+User=jzfre
+Group=jzfre
+WorkingDirectory=/home/jzfre/services/memories
+EnvironmentFile=/home/jzfre/.config/memories/server.env
+ExecStart=/usr/bin/node /home/jzfre/services/memories/apps/memory-server/dist/main.js
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+UMask=0077
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/jzfre/memories-vault /home/jzfre/.local/state/memories
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

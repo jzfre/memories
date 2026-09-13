@@ -1,0 +1,24 @@
+# Legacy gateway restore configuration; not used by the current filesystem MCP.
+# Current deployment: deploy/README.md.
+vault:
+  root: /vault
+policy:
+  default_namespace: personal
+  default_sensitivity: internal
+  allowed_namespaces: [personal, career, brain-gym, home, public-research, testing]
+  allowed_sensitivity: [public, internal]
+actor: jr
+connectors:
+  claude-code:
+    transport: stdio
+    auth: none
+    capabilities: [read, write]
+    scope: { namespaces: "*", sensitivities: "*" }
+  chatgpt:
+    transport: http
+    auth: token
+    capabilities: [read, write]
+    scope: { namespaces: "*", sensitivities: "*" }
+note_rules:
+  quarantine_invalid: false
+  severities: {}

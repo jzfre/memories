@@ -1,3 +1,29 @@
+# Memories: Markdown as extended context
+
+The current runtime is `apps/memory-server`. It searches and edits the vault directly, with recoverable history outside the vault. It has no PostgreSQL, embedding service, namespace policy or required note protocol. ChatGPT/Codex supplies the reasoning and research.
+
+[Current setup, tools, synchronization and operating limits](docs/filesystem-memories.md).
+
+```sh
+pnpm install --filter @memories/memory-server...
+pnpm build
+MEMORIES_VAULT="/path/to/vault" pnpm mcp
+# HTTP requires a private MEMORIES_TOKEN (at least 32 random bytes).
+MEMORIES_VAULT="/path/to/vault" pnpm mcp:http
+pnpm test
+pnpm typecheck
+```
+
+`pnpm scan` refreshes deterministic maintenance reports; search reads current files immediately. The HTTP service refreshes reports every 15 minutes. In the verified Rocinante deployment, official Obsidian Sync keeps the Mac and headless server copies synchronized. Codex connects to the server through authenticated HTTPS and Cloudflare Tunnel. The separate ChatGPT connection remains pending; see the linked deployment record for current evidence and limits.
+
+The previous gateway is retained for migration/rollback under `apps/memory-gateway`. Root `legacy:*` commands select its old behavior. Its tests require a disposable database and must not be run against owner data.
+
+---
+
+## Historical implementation documentation (July 2026)
+
+The remainder is preserved historical material. Its Postgres, Syncthing, protocol, old tools and root command descriptions do not describe the current filesystem runtime.
+
 # Memories
 
 Local-first Knowledge Intelligence OS: ingest a Markdown vault into Postgres and serve
@@ -158,9 +184,12 @@ Frontmatter on a written note is intentionally minimal — no `status`, `confide
 | `source_refs` | provenance strings (chat/date, URLs, paths) | omitted if none |
 | `created` | `YYYY-MM-DD` | write-time date |
 
-See [skills/capturing-memories/SKILL.md](skills/capturing-memories/SKILL.md) for the
-full note-writing workflow AI clients follow (search-before-write, wikilinking,
-structured-kind section templates), and
+See [skills/using-memories/SKILL.md](skills/using-memories/SKILL.md) for the proactive
+recall workflow AI clients follow (retrieve owner-specific context automatically,
+distinguish recorded plans from live state, then update canonical notes without
+duplication). See
+[skills/capturing-memories/SKILL.md](skills/capturing-memories/SKILL.md) for the
+detailed note-writing workflow, and
 [DOCUMENTATION.md §4](DOCUMENTATION.md#4-the-write-model-in-depth) for the write path
 in detail.
 

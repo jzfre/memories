@@ -1,3 +1,29 @@
+# Memories: Markdown as extended context
+
+The current runtime is `apps/memory-server`. It searches and edits the vault directly, with recoverable history outside the vault. It has no PostgreSQL, embedding service, namespace policy or required note protocol. ChatGPT/Codex supplies the reasoning and research.
+
+[Current setup, tools, synchronization and operating limits](docs/filesystem-memories.md).
+
+```sh
+pnpm install --filter @memories/memory-server...
+pnpm build
+MEMORIES_VAULT="/path/to/vault" pnpm mcp
+# HTTP requires a private MEMORIES_TOKEN (at least 32 random bytes).
+MEMORIES_VAULT="/path/to/vault" pnpm mcp:http
+pnpm test
+pnpm typecheck
+```
+
+`pnpm scan` refreshes deterministic maintenance reports; search reads current files immediately. The HTTP service refreshes reports every 15 minutes. In the verified Rocinante deployment, official Obsidian Sync keeps the Mac and headless server copies synchronized. Codex connects to the server through authenticated HTTPS and Cloudflare Tunnel. The separate ChatGPT connection remains pending; see the linked deployment record for current evidence and limits.
+
+The previous gateway is retained for migration/rollback under `apps/memory-gateway`. Root `legacy:*` commands select its old behavior. Its tests require a disposable database and must not be run against owner data.
+
+---
+
+## Historical implementation documentation (July 2026)
+
+The remainder is preserved historical material. Its Postgres, Syncthing, protocol, old tools and root command descriptions do not describe the current filesystem runtime.
+
 # Memories — How It Actually Works
 
 This document explains the system end-to-end: the two-repository model, every place an
@@ -318,8 +344,12 @@ sections, tag rules, folder routing, link etiquette — lives in a single vault 
 instructions at `initialize`** (`apps/memory-gateway/src/mcp/build.ts`, via
 `loadProtocol()`), so there is one copy to keep current instead of one per client
 config. It's also re-readable any time via the `memory_protocol` tool. The
-`capturing-memories` skill (`skills/capturing-memories/SKILL.md`) is the local,
-install-time summary of the same rules for Claude Code specifically.
+`using-memories` (`skills/using-memories/SKILL.md`) is the proactive recall and
+freshness workflow for clients that support skills. It tells the client to consult
+owner-specific knowledge without waiting for an explicit "search Memories" request.
+`capturing-memories` (`skills/capturing-memories/SKILL.md`) remains the detailed local
+summary of the legacy write rules. The protocol applies only to that legacy gateway;
+the current filesystem runtime and `using-memories` skill do not require it.
 
 ---
 
