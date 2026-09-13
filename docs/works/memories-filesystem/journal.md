@@ -19,3 +19,9 @@
 - Deployed a fresh build on Rocinante, retaining the previous application privately for rollback. All 72 visible Markdown hashes, existing history and credential-file contents were unchanged by deployment. Both MCP and Headless Sync remain active/enabled.
 - Live public HTTPS checks passed authentication rejection (401), browser-origin rejection (403), method restriction (405), exact eight-tool discovery, keyword retrieval and full-note fetch. HTTP remains bound only to loopback.
 - Encrypted independent vault backups were previously decrypted and compared with their Rocinante copies. Backup files, audit artifacts and credentials remain outside the repository.
+
+## Portable clients and ChatGPT setup — 2026-09-13
+- Expanded the portable skill and MCP initialization guidance with short AND-keyword retrieval, context reuse, exact fetch paths, authorized writes and conflict reconciliation. Other harnesses can load the skill or its plain Markdown workflow independently of their MCP connection.
+- Added `docs/agents.md` with generic HTTP/stdio connection values and the eight-tool contract; added `docs/chatgpt.md` with exact web form values, activation, verification and troubleshooting. Official OpenAI guidance was checked on this date: account plugins support mobile, while Desktop-only plugins do not.
+- ChatGPT uses Server URL and No authentication with the complete private capability URL. The URL remains an authentication credential; this server does not implement OAuth. Account-side web/mobile calls remain unverified; the available built-in browser is signed out.
+- All 53 tests, typecheck, build and compiled create/edit/restart/restore smoke passed after the server guidance change. Skill YAML, metadata, links and tool names passed structural checks; a simulated generic client exercised query retry, context reuse, conflicting edits and unavailable access.

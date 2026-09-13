@@ -108,7 +108,7 @@ sudo systemctl is-active memories.service
 
 The listener must remain on loopback. An unauthenticated request to `https://mcp.aqui.technology/mcp` must return 401. From an authorized MCP client, verify all eight tools, `kb_peek`, search and fetch. Then create a temporary note, edit it, inspect its history, restart Memories, and restore the previous content. Verify the result on the Mac, remove the test note, and confirm deletion reaches the server. Preserve test evidence outside the vault without credentials or private note bodies.
 
-Codex is connected to this HTTPS service. The separate ChatGPT web connection remains pending: configure its private endpoint and verify discovery and a real retrieval in ChatGPT before marking that client connected. Service startup alone does not establish client compatibility.
+Codex is connected to this HTTPS service. Follow the [ChatGPT web/mobile guide](../docs/chatgpt.md) to configure the separate account connection and verify discovery and a real retrieval before marking that client connected. Other harnesses can use the [agent setup guide](../docs/agents.md). Service startup alone does not establish client compatibility.
 
 ## Upgrades, backups and recovery
 

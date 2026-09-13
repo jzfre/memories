@@ -29,7 +29,7 @@ For a question involving the owner's life, projects or prior decisions, start wi
 | `kb_restore(path, version)` | Restore a version, saving the current content first |
 | `kb_maintenance()` | Refresh changed-file, duplicate, link and navigation reports |
 
-The `memories://overview` resource provides bounded Markdown navigation.
+The `memories://overview` resource provides bounded Markdown navigation. See [ChatGPT setup](chatgpt.md) for the web form and mobile verification, or [agent setup](agents.md) for other harnesses.
 
 Search is accent-insensitive and requires every supplied keyword to match somewhere in a note's searchable fields. Use short topic phrases; try alternate names in separate searches. Results contain bounded snippets; fetch the note before relying on details or editing it. Search reads current files directly and needs no maintenance scan to become fresh.
 
