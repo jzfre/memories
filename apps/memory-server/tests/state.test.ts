@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
@@ -113,6 +113,14 @@ test('restart restores the previous snapshot and detects subsequent edits and ad
   expect((await restarted.refresh()).changed).toEqual(['Life.md', 'New.md']);
 });
 
+test('keeps supporting BOM-prefixed cached JSON after exact note decoding', async () => {
+  const previous = await maintenance.refresh();
+  const report = join(state, 'maintenance.json');
+  await writeFile(report, '\uFEFF' + await readFile(report, 'utf8'));
+  expect(await maintenance.status()).toEqual(previous);
+  await expect(maintenance.refresh()).resolves.toMatchObject({ noteCount: 0 });
+});
+
 test('navigation stays outside the vault and excludes note bodies', async () => {
   const content = '# My life\nPRIVATE_SENTENCE_NOT_FOR_THE_OVERVIEW';
   await writeFile(join(vault, 'Life.md'), content);
@@ -154,4 +162,55 @@ test('corrupt saved JSON is surfaced without replacing the last report', async (
 
   await unlink(join(state, 'maintenance.json'));
   expect((await maintenance.refresh()).changed).toEqual(['Life.md']);
+});
+
+
+test('maintenance validates state containment before creating files or returning cached reports', async () => {
+  const unsafe = join(vault, 'runtime');
+  const service = new Maintenance(new VaultStore(vault, unsafe), unsafe);
+  await expect(service.refresh()).rejects.toMatchObject({ code: 'INVALID_STATE_DIR' });
+  await expect(service.status()).rejects.toMatchObject({ code: 'INVALID_STATE_DIR' });
+  expect(await readdir(vault)).toEqual([]);
+  expect(() => new Maintenance(store, unsafe)).toThrow('same private state directory');
+});
+
+test('maintenance refuses symlinked reports and overviews without exposing or modifying their targets', async () => {
+  await maintenance.refresh();
+  const outside = join(base, 'outside.md');
+  await writeFile(outside, 'outside private content');
+  await unlink(join(state, 'overview.md'));
+  await symlink(outside, join(state, 'overview.md'));
+  await expect(maintenance.overview()).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+  await expect(maintenance.refresh()).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+  await unlink(join(state, 'maintenance.json'));
+  await symlink(outside, join(state, 'maintenance.json'));
+  await expect(maintenance.status()).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+  expect(await readFile(outside, 'utf8')).toBe('outside private content');
+});
+
+test('maintenance refuses a replaced state directory', async () => {
+  await maintenance.refresh();
+  const outside = join(base, 'outside');
+  await mkdir(outside);
+  await rm(state, { recursive: true });
+  await symlink(outside, state);
+  await expect(maintenance.status()).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+  await expect(maintenance.refresh()).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+  expect(await readdir(outside)).toEqual([]);
+});
+
+test.each(['null', '{}', '{"hashes":null}', '{"hashes":[]}'])('rejects structurally invalid cached state %s', async content => {
+  await maintenance.refresh();
+  await writeFile(join(state, 'maintenance.json'), content);
+  await expect(maintenance.status()).rejects.toThrow('Cannot read maintenance state');
+  await expect(maintenance.refresh()).rejects.toThrow('Cannot read maintenance state');
+  expect(await readFile(join(state, 'maintenance.json'), 'utf8')).toBe(content);
+});
+
+test('rebuilds a missing overview from current notes', async () => {
+  await store.write('Home.md', '# Home');
+  await maintenance.refresh();
+  await unlink(join(state, 'overview.md'));
+  expect(await maintenance.overview()).toContain('Home.md');
+  expect((await store.read('Home.md')).content).toBe('# Home');
 });

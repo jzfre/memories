@@ -61,7 +61,7 @@ async function prospectiveRealPath(path: string): Promise<string> {
   }
 }
 
-async function checkedPath(base: string, path: string, createParents = false, directory = false): Promise<string> {
+export async function checkedPath(base: string, path: string, createParents = false, directory = false): Promise<string> {
   try {
     const baseInfo = await lstat(base);
     if (!baseInfo.isDirectory() || baseInfo.isSymbolicLink()) {
@@ -93,9 +93,9 @@ async function checkedPath(base: string, path: string, createParents = false, di
   return current;
 }
 
-async function readBounded(path: string, limit: number): Promise<{ content: string; modifiedAt: number }> {
+export async function readBounded(path: string, limit: number): Promise<{ content: string; modifiedAt: number }> {
   let handle;
-  try { handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW); }
+  try { handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
   catch (error) {
     if (hasCode(error, 'ENOENT')) throw new VaultError('NOT_FOUND', 'The note or version does not exist.');
     if (hasCode(error, 'ELOOP')) throw new VaultError('UNSAFE_PATH', 'Symlinks are not accessible.');
@@ -105,15 +105,21 @@ async function readBounded(path: string, limit: number): Promise<{ content: stri
     const info = await handle.stat();
     if (!info.isFile()) throw new VaultError('UNSAFE_PATH', 'Only regular files are accessible.');
     if (info.size > limit) throw new VaultError('NOTE_TOO_LARGE', 'The note exceeds the size limit.');
-    const buffer = Buffer.alloc(limit + 1);
+    let buffer = Buffer.alloc(Math.min(limit + 1, Math.max(info.size + 1, 8192)));
     let length = 0;
     while (length <= limit) {
+      if (length === buffer.length) {
+        const expanded = Buffer.alloc(Math.min(limit + 1, buffer.length * 2));
+        buffer.copy(expanded);
+        buffer = expanded;
+      }
       const { bytesRead } = await handle.read(buffer, length, buffer.length - length, null);
       if (!bytesRead) break;
       length += bytesRead;
     }
     if (length > limit) throw new VaultError('NOTE_TOO_LARGE', 'The note exceeds the size limit.');
-    const content = new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, length));
+    // A UTF-8 BOM is part of the file bytes: retain it for hashes and recovery.
+    const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buffer.subarray(0, length));
     return { content, modifiedAt: info.mtimeMs };
   } finally { await handle.close(); }
 }
@@ -125,14 +131,16 @@ function strings(value: unknown): string[] {
 
 function noteFrom(path: string, content: string, modifiedAt: number): Note {
   let data: Record<string, unknown> = {};
-  const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+  // Ignore a BOM only while extracting metadata, never in returned/saved content.
+  const markdown = content.startsWith('\uFEFF') ? content.slice(1) : content;
+  const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(markdown);
   if (header) {
     try {
       const parsed: unknown = parseYaml(header[1]!, { maxAliasCount: 50 });
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed as Record<string, unknown>;
     } catch { /* Keep malformed frontmatter readable and preserve its exact bytes on writes. */ }
   }
-  const body = header ? content.slice(header[0].length) : content;
+  const body = header ? markdown.slice(header[0].length) : markdown;
   const title = typeof data.title === 'string' && data.title.trim()
     ? data.title.trim() : markdownTitle(body) ?? basename(path, '.md');
   const links = new Set<string>();
@@ -167,12 +175,18 @@ export class VaultStore {
       }
       const vault = await realpath(this.root);
       const state = await prospectiveRealPath(this.stateDir);
-      if (inside(this.root, this.stateDir) || inside(vault, state)) {
-        throw new VaultError('INVALID_STATE_DIR', 'History and runtime state must be outside the synced vault.');
+      if (inside(this.root, this.stateDir) || inside(this.stateDir, this.root) || inside(vault, state) || inside(state, vault)) {
+        throw new VaultError('INVALID_STATE_DIR', 'History and runtime state must not overlap the synced vault.');
       }
       await mkdir(state, { recursive: true, mode: 0o700 });
       return { vault, state };
     })();
+  }
+
+  // Maintenance uses the same validated private directory as history.
+  async runtimeDirectory(): Promise<string> {
+    const { state } = await this.ready();
+    return checkedPath(state, '', false, true);
   }
 
   private serialized<T>(action: () => Promise<T>): Promise<T> {
@@ -312,6 +326,7 @@ export class VaultStore {
   }
 
   private async writeUnlocked(path: string, content: string, expectedHash?: string): Promise<Note> {
+    if (Buffer.byteLength(content, 'utf8') > MAX_NOTE_BYTES) throw new VaultError('NOTE_TOO_LARGE', 'The note exceeds 2 MiB.');
     const old = await this.current(path);
     this.checkExpected(old, expectedHash);
     const { vault } = await this.ready();
@@ -369,10 +384,13 @@ export class VaultStore {
     if (!VERSION_PATTERN.test(version)) throw new VaultError('INVALID_VERSION', 'Invalid history version.');
     const dir = await this.historyDirectory(path);
     const file = await checkedPath(dir, `${version}.json`);
-    const saved: unknown = JSON.parse((await readBounded(file, MAX_HISTORY_BYTES)).content);
+    const content = (await readBounded(file, MAX_HISTORY_BYTES)).content;
+    let saved: unknown;
+    try { saved = JSON.parse(content.replace(/^\uFEFF/, '')); }
+    catch { throw new VaultError('INVALID_VERSION', 'The saved version is not valid JSON.'); }
     if (!saved || typeof saved !== 'object' || !('path' in saved) || saved.path !== path ||
       !('version' in saved) || saved.version !== version || !('content' in saved) || typeof saved.content !== 'string' ||
-      !('hash' in saved) || saved.hash !== hash(saved.content) || !('createdAt' in saved) || typeof saved.createdAt !== 'number') {
+      !('hash' in saved) || saved.hash !== hash(saved.content) || !('createdAt' in saved) || typeof saved.createdAt !== 'number' || !Number.isSafeInteger(saved.createdAt) || saved.createdAt < 0) {
       throw new VaultError('INVALID_VERSION', 'The saved version is invalid or its content hash differs.');
     }
     return saved as SavedVersion;
@@ -393,11 +411,11 @@ export class VaultStore {
     return versions.sort((a, b) => b.createdAt - a.createdAt || b.version.localeCompare(a.version));
   }
 
-  async restore(input: string, version: string): Promise<Note> {
+  async restore(input: string, version: string, expectedHash?: string): Promise<Note> {
     const path = notePath(input);
     return this.serialized(async () => {
       const saved = await this.loadVersion(path, version);
-      return this.writeUnlocked(path, saved.content);
+      return this.writeUnlocked(path, saved.content, expectedHash);
     });
   }
 }

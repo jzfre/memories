@@ -1,0 +1,22 @@
+{
+  "vaults": [
+    {
+      "id": "personal",
+      "path": "/home/memories/memories-vault",
+      "state": "/home/memories/.local/state/memories",
+      "token": "REPLACE_WITH_EXISTING_PERSONAL_CREDENTIAL"
+    },
+    {
+      "id": "work",
+      "path": "/home/memories/memories-vaults/work",
+      "state": "/home/memories/.local/state/memories-work",
+      "token": "REPLACE_WITH_UNIQUE_RANDOM_WORK_CREDENTIAL"
+    },
+    {
+      "id": "family",
+      "path": "/home/memories/memories-vaults/family",
+      "state": "/home/memories/.local/state/memories-family",
+      "token": "REPLACE_WITH_UNIQUE_RANDOM_FAMILY_CREDENTIAL"
+    }
+  ]
+}

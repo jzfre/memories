@@ -24,6 +24,32 @@ beforeEach(async () => {
 afterEach(async () => { await rm(base, { recursive: true, force: true }); });
 
 describe('live Markdown access', () => {
+  it('preserves a UTF-8 BOM in hashes and remove/restore while still reading metadata', async () => {
+    const content = '\uFEFF---\r\ntitle: Original title\r\ntags: [reference]\r\n---\r\n# Body title\r\nText [[Related]].\r\n';
+    const original = Buffer.from(content, 'utf8');
+    await writeFile(join(root, 'Bom.md'), original);
+    const note = await store.read('Bom.md');
+    expect(note).toMatchObject({ content, title: 'Original title', tags: ['reference'], links: ['Related'] });
+    expect(note.hash).toBe(createHash('sha256').update(original).digest('hex'));
+    await store.remove(note.path, note.hash);
+    const version = (await store.history(note.path))[0]!;
+    expect(version.hash).toBe(note.hash);
+    await store.restore(note.path, version.version, '');
+    expect(await readFile(join(root, note.path))).toEqual(original);
+    expect((await store.read(note.path)).content).toBe(content);
+  });
+
+  it('extracts a heading behind a BOM and continues rejecting invalid UTF-8', async () => {
+    await writeFile(join(root, 'Bom.md'), '\uFEFF# Heading\nBody');
+    expect((await store.read('Bom.md')).title).toBe('Heading');
+    const invalid = Buffer.from([0xef, 0xbb, 0xbf, 0xc3, 0x28]);
+    await writeFile(join(root, 'Invalid.md'), invalid);
+    await expect(store.read('Invalid.md')).rejects.toThrow();
+    await expect(store.remove('Invalid.md')).rejects.toThrow();
+    expect(await readFile(join(root, 'Invalid.md'))).toEqual(invalid);
+    expect(await store.history('Invalid.md')).toEqual([]);
+  });
+
   it('reads complete content and metadata without rewriting the note', async () => {
     const content = '---\ntitle: Život\ntags: [rodina, domov]\naliases: [Môj život]\n---\n# Notes\nSee [[Family#People|rodina]] and [plans](Plans.md).\n';
     await writeFile(join(root, 'Life.md'), content);
@@ -50,7 +76,7 @@ describe('live Markdown access', () => {
     expect((await store.list())[0].title).toBe('Updated');
   });
 
-  it('extracts note links while excluding inline and fenced code', async () => {
+  it.each(['\n', '\r\n'])('extracts note links while excluding inline and fenced code with %j line endings', async newline => {
     const content = [
       '[[Family#People|rodina]] ![[Embedded.md]] [plan](Plans.md "A title")',
       '[space](<Space Note.md>) [encoded](Space%20Note.md#Heading)',
@@ -59,7 +85,7 @@ describe('live Markdown access', () => {
       '````typescript', '[[Code]]', '```', '[[Still code]]', '`````',
       '[[After code]]', '~~~', '[hidden](Hidden.md)', '~~~',
       '[broken [[Recovered]]', '```', '[[Unclosed code]]',
-    ].join('\n');
+    ].join(newline);
     await writeFile(join(root, 'Links.md'), content);
     expect((await store.read('Links.md')).links).toEqual([
       'Family', 'Embedded.md', 'After code', 'Recovered', 'Plans.md', 'Space Note.md',
@@ -76,6 +102,14 @@ describe('live Markdown access', () => {
 
   it.each([
     ['# Title with spaces ###\r\nBody', 'Title with spaces'],
+    ['# C#\nBody', 'C#'],
+    ['# F# ###\nBody', 'F#'],
+    ['   # Indented title\nBody', 'Indented title'],
+    ['```markdown\n# Example\n```\n# Actual title', 'Actual title'],
+    ['~~~markdown\n# Example\n~~~\n# Actual title', 'Actual title'],
+    ['````markdown\n# Example\n```\n# Still an example\n````\n# Actual title', 'Actual title'],
+    ['    # Indented code\n# Actual title', 'Actual title'],
+    ['```\n# Unclosed example', 'Heading'],
     ['#   \n# Next heading\nBody', 'Next heading'],
     ['No heading\n## Subheading', 'Heading'],
   ])('reads a usable heading or falls back to the filename', async (content, title) => {
@@ -269,5 +303,84 @@ describe('recoverable writes', () => {
     await rm(lock, { recursive: true });
     await pending;
     expect((await store.read('Life.md')).content).toBe('# After');
+  });
+});
+
+
+describe('history validation and conditional restoration', () => {
+  it('keeps a note when its removal backup cannot be saved', async () => {
+    const note = await store.write('Life.md', '# Keep this note');
+    const outside = join(base, 'outside');
+    await mkdir(outside);
+    await symlink(outside, join(state, 'history'));
+    await expect(store.remove('Life.md', note.hash)).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+    expect((await store.read('Life.md')).content).toBe(note.content);
+    expect(await readdir(outside)).toEqual([]);
+  });
+
+  it('refuses to remove symlink notes or files in symlink folders', async () => {
+    const outside = join(base, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'Keep.md'), '# Keep');
+    await symlink(join(outside, 'Keep.md'), join(root, 'Link.md'));
+    await symlink(outside, join(root, 'Folder'));
+    await expect(store.remove('Link.md')).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+    await expect(store.remove('Folder/Keep.md')).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+    expect(await readFile(join(outside, 'Keep.md'), 'utf8')).toBe('# Keep');
+  });
+
+  it('can restore conditionally without overwriting an intervening edit or recreated note', async () => {
+    const original = await store.write('Life.md', '# Before');
+    const edited = await store.write('Life.md', '# After', original.hash);
+    const version = (await store.history('Life.md'))[0]!.version;
+    await expect(store.restore('Life.md', version, original.hash)).rejects.toMatchObject({ code: 'STALE_WRITE' });
+    expect((await store.read('Life.md')).content).toBe('# After');
+    expect(await store.history('Life.md')).toHaveLength(1);
+    await store.remove('Life.md', edited.hash);
+    const restored = await store.restore('Life.md', version, '');
+    expect(restored.content).toBe('# Before');
+    await expect(store.restore('Life.md', version, '')).rejects.toMatchObject({ code: 'STALE_WRITE' });
+    expect(await store.history('Life.md')).toHaveLength(2);
+  });
+
+  it('rejects an oversized saved version before it replaces the current note', async () => {
+    await store.write('Life.md', '# Before');
+    await store.write('Life.md', '# Current');
+    const version = (await store.history('Life.md'))[0]!.version;
+    const key = createHash('sha256').update('Life.md').digest('hex');
+    const file = join(state, 'history', key, `${version}.json`);
+    const saved = JSON.parse(await readFile(file, 'utf8'));
+    saved.content = 'x'.repeat(2 * 1024 * 1024 + 1);
+    saved.hash = createHash('sha256').update(saved.content).digest('hex');
+    await writeFile(file, JSON.stringify(saved));
+    await expect(store.restore('Life.md', version)).rejects.toMatchObject({ code: 'NOTE_TOO_LARGE' });
+    expect((await store.read('Life.md')).content).toBe('# Current');
+    expect(await readdir(join(state, 'history', key))).toEqual([`${version}.json`]);
+  });
+
+  it('reports invalid history JSON without echoing its contents', async () => {
+    await store.write('Life.md', '# Before');
+    await store.write('Life.md', '# Current');
+    const version = (await store.history('Life.md'))[0]!.version;
+    const key = createHash('sha256').update('Life.md').digest('hex');
+    await writeFile(join(state, 'history', key, `${version}.json`), 'private invalid data');
+    await expect(store.restore('Life.md', version)).rejects.toMatchObject({ code: 'INVALID_VERSION', message: 'The saved version is not valid JSON.' });
+    expect((await store.read('Life.md')).content).toBe('# Current');
+  });
+
+  it('keeps supporting BOM-prefixed JSON history while preserving note bytes', async () => {
+    const original = await store.write('Life.md', '\uFEFF# Before');
+    await store.write('Life.md', '# Current');
+    const version = (await store.history('Life.md'))[0]!.version;
+    const key = createHash('sha256').update('Life.md').digest('hex');
+    const file = join(state, 'history', key, `${version}.json`);
+    await writeFile(file, '\uFEFF' + await readFile(file, 'utf8'));
+    expect((await store.history('Life.md'))[0]!.hash).toBe(original.hash);
+    await store.restore('Life.md', version);
+    expect(await readFile(join(root, 'Life.md'), 'utf8')).toBe(original.content);
+  });
+
+  it('rejects a state root that contains the vault', async () => {
+    await expect(new VaultStore(root, base).list()).rejects.toMatchObject({ code: 'INVALID_STATE_DIR' });
   });
 });

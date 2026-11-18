@@ -4,11 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=jzfre
-Group=jzfre
-WorkingDirectory=/home/jzfre/services/memories
-EnvironmentFile=/home/jzfre/.config/memories/server.env
-ExecStart=/usr/bin/node /home/jzfre/services/memories/apps/memory-server/dist/main.js
+User=memories
+Group=memories
+WorkingDirectory=/home/memories/Code/personal/memories
+EnvironmentFile=/home/memories/services/memories/config/server.env
+ExecStart=/usr/bin/node /home/memories/Code/personal/memories/apps/memory-server/dist/main.js
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=30
@@ -17,7 +17,7 @@ UMask=0077
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/jzfre/memories-vault /home/jzfre/.local/state/memories
+ReadWritePaths=/home/memories/memories-vault /home/memories/.local/state/memories /home/memories/memories-vaults/work /home/memories/memories-vaults/family /home/memories/.local/state/memories-work /home/memories/.local/state/memories-family
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true

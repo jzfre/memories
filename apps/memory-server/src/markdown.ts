@@ -1,10 +1,21 @@
 export function markdownTitle(body: string): string | undefined {
-  for (const line of body.split('\n')) {
-    if (line[0] !== '#' || !line[1] || !/\s/.test(line[1])) continue;
-    const text = line.slice(1).trim();
+  let fence = '';
+  for (const raw of body.split('\n')) {
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (marker && marker[1]![0] === fence[0] && marker[1]!.length >= fence.length && !marker[2]!.trim()) fence = '';
+      continue;
+    }
+    if (marker) { fence = marker[1]!; continue; }
+    const heading = /^ {0,3}#[ \t]+(.*)$/.exec(line);
+    if (!heading) continue;
+    const text = heading[1]!.trim();
     let end = text.length;
     while (end > 0 && text[end - 1] === '#') end--;
-    const title = text.slice(0, end).trim();
+    // Closing hashes need a whitespace separator; C# and F# are literal titles.
+    const title = end < text.length && (end === 0 || /[ \t]/.test(text[end - 1]!))
+      ? text.slice(0, end).trim() : text;
     if (title) return title;
   }
   return undefined;
@@ -16,7 +27,8 @@ export function markdownLinks(body: string): string[] {
   const wiki: string[] = [];
   const markdown: string[] = [];
   let fence = '';
-  for (const line of body.split('\n')) {
+  for (const raw of body.split('\n')) {
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
     const marker = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       if (marker && marker[1]![0] === fence[0] && marker[1]!.length >= fence.length && !marker[2]!.trim()) fence = '';

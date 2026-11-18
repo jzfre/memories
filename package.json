@@ -13,7 +13,8 @@
     "test": "pnpm --filter @memories/memory-server test",
     "typecheck": "pnpm --filter @memories/memory-server typecheck",
     "build": "pnpm --filter @memories/memory-server build",
-    "test:compiled": "node apps/memory-server/tests/compiled-smoke.mjs"
+    "test:compiled": "node apps/memory-server/tests/compiled-smoke.mjs",
+    "release": "pnpm build && node scripts/package-release.mjs"
   },
   "packageManager": "pnpm@9.15.9"
 }

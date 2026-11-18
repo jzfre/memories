@@ -1,31 +1,39 @@
-import { resolve, join } from 'node:path';
-import { homedir } from 'node:os';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { VaultStore } from './vault.js';
-import { Maintenance } from './state.js';
+import { loadVaults, selectVault } from './config.js';
 import { createMcp } from './mcp.js';
 import { startHttp } from './http.js';
 
 async function main() {
-  const root = process.env.MEMORIES_VAULT;
-  if (!root) throw new Error('Set MEMORIES_VAULT to the local vault directory');
-  const state = resolve(process.env.MEMORIES_STATE ?? join(homedir(), '.local/state/memories'));
-  const store = new VaultStore(resolve(root), state);
-  const maintenance = new Maintenance(store, state);
-  if (process.argv.includes('--maintenance')) { process.stdout.write(JSON.stringify(await maintenance.refresh(), null, 2) + '\n'); return; }
-  if (process.argv.includes('--stdio')) {
-    await createMcp(store, maintenance).connect(new StdioServerTransport());
+  const vaults = await loadVaults(process.env);
+  if (process.argv.includes('--maintenance') || process.argv.includes('--stdio')) {
+    const vault = selectVault(vaults, process.env.MEMORIES_VAULT_ID);
+    if (process.argv.includes('--maintenance')) { process.stdout.write(JSON.stringify(await vault.maintenance.refresh(), null, 2) + '\n'); return; }
+    await createMcp(vault.store, vault.maintenance, vault.id).connect(new StdioServerTransport());
     return;
   }
   const interval = Number(process.env.MEMORIES_MAINTENANCE_SECONDS ?? '900');
   const port = Number(process.env.MEMORIES_PORT ?? '3333');
-  if (!Number.isSafeInteger(interval) || interval < 10) throw new Error('Invalid maintenance interval');
+  // Node clamps delays above 2^31 - 1 ms to 1 ms, which would cause a scan loop.
+  if (!Number.isSafeInteger(interval) || interval < 10 || interval > Math.floor(2_147_483_647 / 1000)) throw new Error('Invalid maintenance interval');
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port');
-  const running = await startHttp({ store, maintenance, port, token: process.env.MEMORIES_TOKEN ?? '', capabilityUrl: process.env.MEMORIES_CAPABILITY_URL === 'true' });
-  await maintenance.refresh();
-  const timer = setInterval(() => { void maintenance.refresh().catch(() => process.stderr.write('Maintenance failed; previous report retained\n')); }, interval * 1000);
-  process.stderr.write(`Memories listening on ${running.url}\n`);
-  const stop = async () => { clearInterval(timer); await running.close(); process.exit(0); };
+  const running = await startHttp({ vaults, port, capabilityUrl: process.env.MEMORIES_CAPABILITY_URL === 'true' });
+  // Derived reports must not prevent an otherwise healthy vault from serving.
+  // Keep both startup and periodic failures local to their vault; tool calls still
+  // return their errors so clients never mistake a failed scan for fresh results.
+  const refresh = () => Promise.all(vaults.map(vault => vault.maintenance.refresh().catch(() => {
+    process.stderr.write(`Maintenance failed for ${vault.id}; existing report retained if available\n`);
+  })));
+  const timer = setInterval(() => { void refresh(); }, interval * 1000);
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    clearInterval(timer);
+    await running.close();
+    process.exit(0);
+  };
   process.once('SIGTERM', stop); process.once('SIGINT', stop);
+  process.stderr.write(`Memories listening on ${running.url}\n`);
+  await refresh();
 }
 main().catch(error => { process.stderr.write(`Memories startup failed: ${error.message}\n`); process.exitCode = 1; });

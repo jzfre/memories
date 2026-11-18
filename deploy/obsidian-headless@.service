@@ -1,0 +1,17 @@
+[Unit]
+Description=Obsidian Headless Sync for Memories %i
+After=network.target
+ConditionPathExists=%h/.config/obsidian-headless/auth_token
+
+[Service]
+Type=simple
+WorkingDirectory=%h/memories-vaults/%i
+ExecStart=/usr/bin/node %h/.local/lib/node_modules/obsidian-headless/cli.js sync --path %h/memories-vaults/%i --continuous
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

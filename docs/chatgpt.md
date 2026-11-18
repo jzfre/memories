@@ -16,9 +16,9 @@ Use the same ChatGPT account and workspace in which you want to use Memories. If
 | Authentication | **No authentication** |
 | Advanced OAuth settings | Leave unused |
 
-The private URL is stored on the owner's Mac in `~/.config/memories/chatgpt-connection.txt`. Copy it directly into the Server URL field. Do not paste it into a conversation, repository, note or screenshot. Another authorized operator must obtain their credential from the server owner; the repository contains no working secret.
+Obtain the private URL for your assigned vault from the server operator and keep it in private client settings. Copy it directly into the Server URL field. Do not paste it into a conversation, repository, note or screenshot; the repository contains no working secret.
 
-**No authentication** means ChatGPT adds no separate OAuth login or bearer header. Memories still authenticates the secret carried in the full URL. The plain `https://mcp.aqui.technology/mcp` address requires a bearer header and returns **401** without it. This deployment does not implement OAuth. Select **Server URL** even though the server uses Cloudflare Tunnel; the form's **Tunnel** option is for OpenAI Secure MCP Tunnel, a different connection method.
+**No authentication** means ChatGPT adds no separate OAuth login or bearer header. Memories still authenticates the secret carried in the full URL. The plain `https://memories.example.com/mcp` address requires a bearer header and returns **401** without it. Memories does not implement OAuth. Select **Server URL** when the server uses Cloudflare Tunnel; the form's **Tunnel** option is for OpenAI Secure MCP Tunnel, a different connection method.
 
 After reviewing the displayed MCP notice, select its acknowledgement and **Create**. Inspect the discovered tools before using the connection.
 
@@ -26,10 +26,10 @@ After reviewing the displayed MCP notice, select its acknowledgement and **Creat
 
 1. Open [Personal plugins](https://chatgpt.com/plugins?view=personal), find Memories, and install it if the page offers an install/plus button. Creating and installing can be separate steps.
 2. Start a new **Work** chat for the first test, following the [official quickstart](https://developers.openai.com/plugins/quickstart). Type `@`, choose Memories, or add it through the tools menu where available.
-3. Ask: **“Use Memories to peek at the KB for Rocinante, then fetch the relevant note and tell me which host runs Memories. Do not change any notes.”**
+3. Ask: **“Use Memories to peek at the KB for backup, report the active vault, then fetch a relevant note and summarize it. Do not change any notes.”**
 4. Confirm an actual `kb_peek` and `fetch` call occurred. A plausible answer from existing chat context does not verify access.
 
-Expected tools: `kb_peek`, `search`, `fetch`, `kb_write`, `kb_edit`, `kb_history`, `kb_restore`, `kb_maintenance`. Some clients display a server prefix on tool names. Full content is fetched using the exact vault-relative path returned by search.
+Expected tools: `kb_peek`, `search`, `fetch`, `kb_write`, `kb_edit`, `kb_remove`, `kb_history`, `kb_restore`, `kb_maintenance`. Some clients display a server prefix on tool names. Full content is fetched using the exact vault-relative path returned by search. Removal requires that note's fetched hash and retains private history for restoration.
 
 The server supplies workflow instructions and tool descriptions when a client connects. The [portable skill](../skills/using-memories/SKILL.md) provides fuller guidance for harnesses that load Agent Skills. Connecting an MCP URL does not upload that local skill file to ChatGPT. For persistent guidance in a chat or project instruction field supported by your client, use:
 
@@ -39,17 +39,20 @@ The server supplies workflow instructions and tool descriptions when a client co
 
 OpenAI's [current plugin documentation](https://learn.chatgpt.com/docs/plugins) states that plugins work in Chat and Work on web, desktop and mobile; mobile can use plugins available to the signed-in account. Plugins marked **Desktop only** are excluded from mobile. Account/workspace policy and client rollout can affect availability.
 
-| Client | What has been established for Memories |
+| Client | Verification required |
 |---|---|
-| Codex in the desktop app | Authenticated remote MCP retrieval verified on 2026-09-13 |
-| ChatGPT web | Public MCP transport verified independently; account-side installation and an actual ChatGPT tool call still need verification |
-| ChatGPT Chat/Work in the desktop app | Verify through the account plugin; the Codex connection is not proof of this separate client |
-| ChatGPT mobile | Documented plugin support; this account's Memories connection has not been tested on a phone |
+| Codex in the desktop app | Check the configured vault with an authenticated `kb_peek` and `fetch` call |
+| ChatGPT web | Install the account plugin and verify an actual tool call in a new chat |
+| ChatGPT Chat/Work in the desktop app | Verify through the account plugin; a Codex connection does not verify this separate client |
+| ChatGPT mobile | Select the account plugin and repeat the read-only retrieval test on the device |
 | Other AI harnesses | Use the [agent setup guide](agents.md) |
+
+Keep actual account connection status and verification records in the authorized
+vault, outside this repository.
 
 Set up and test the account plugin on the web first. On mobile, use the same account/workspace, start a new chat, select Memories when available and repeat the read-only test. If it is absent, check account/workspace, plugin installation, client updates and any Desktop-only label. Changing the server URL or removing server authentication will not make a client surface support a missing plugin.
 
-The remote connection talks to Rocinante over public HTTPS. It does not require the Mac vault to be mounted or the phone to join Tailscale. Rocinante, Memories and its Cloudflare Tunnel must be running.
+The remote connection talks to the server over public HTTPS. It does not require the desktop vault to be mounted or the phone to join a private network. Memories and its HTTPS tunnel must be running.
 
 ## If it does not work
 
@@ -60,8 +63,8 @@ The remote connection talks to Rocinante over public HTTPS. It does not require 
 | 403 Browser origins | Browser JavaScript is calling the endpoint directly; use ChatGPT's MCP connection so its backend calls the server |
 | 405 when opening the URL | Address-bar navigation sends GET; MCP uses POST. Test through the connector, not a browser page |
 | Connection created, but no tools in chat | Install the personal plugin, select it in a new chat, and verify the account/workspace |
-| Tool list differs from the eight above | Open the connection and **Refresh**, then start a new chat |
+| Tool list differs from the nine above | Open the connection and **Refresh**, then start a new chat |
 | Developer mode or creation unavailable | Check the account/workspace policy; see the official guide rather than assuming a plan entitlement |
-| 502 or connection timeout | Check the Memories service and Cloudflare Tunnel on Rocinante |
+| 502 or connection timeout | Check the Memories service and HTTPS tunnel on the server |
 
 After changes to server instructions or tool metadata, use **Refresh** on the connection and retest in a new chat. Record the client, tool called and actual result before marking that surface verified. Product guidance above was checked against official OpenAI documentation on **2026-09-13**.
